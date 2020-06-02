@@ -13,5 +13,7 @@ PYBIND11_MODULE(pyleopart, m)
   py::class_<particles>(m, "particles")
       .def(py::init<const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                                        Eigen::RowMajor>&,
-                    const std::vector<int>&>());
+                    const std::vector<int>&>())
+      .def("data", py::overload_cast<int, int>(&particles::particles::data))
+      .def("cell_particles", &particles::particles::cell_particles);
 }

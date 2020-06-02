@@ -3,17 +3,20 @@
 
 #pragma once
 
-namespace leopart {
+namespace leopart
+{
 
-class particles {
+class particles
+{
 public:
   /// Initialise particles with position and the index of the cell which
   /// contains them.
-  particles(const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> &x,
-            const std::vector<int> &cells);
+  particles(const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>& x,
+            const std::vector<int>& cells);
 
   /// Get the data for a given field (index idx) on particle p (non-const)
-  Eigen::Map<Eigen::VectorXd> data(int p, int idx) {
+  Eigen::Map<Eigen::VectorXd> data(int p, int idx)
+  {
     int size = _field_shape[idx][0];
     if (_field_shape[idx].size() > 1)
       size *= _field_shape[idx][1];
@@ -22,12 +25,18 @@ public:
   }
 
   /// Get the data for a given field (index idx) on particle p (const)
-  Eigen::Map<const Eigen::VectorXd> data(int p, int idx) const {
+  Eigen::Map<const Eigen::VectorXd> data(int p, int idx) const
+  {
     int size = _field_shape[idx][0];
     if (_field_shape[idx].size() > 1)
       size *= _field_shape[idx][1];
     return Eigen::Map<const Eigen::VectorXd>(_field_data[idx].data() + size * p,
                                              size);
+  }
+
+  const std::vector<int>& cell_particles(int c) const
+  {
+    return _cell_particles[c];
   }
 
 private:
