@@ -5,7 +5,9 @@ using namespace leopart;
 
 particles::particles(
     const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>& x,
-    const std::vector<int>& cells) : _field_name({"x"}), _field_shape({{3}}), _field_data({std::vector<double>(x.rows()* x.cols())})
+    const std::vector<int>& cells)
+    : _field_name({"x"}), _field_shape({{3}}),
+      _field_data({std::vector<double>(x.rows() * 3)})
 {
   // Find max cell index, and create cell->particle map
   auto max_cell_it = std::max_element(cells.begin(), cells.end());
@@ -17,5 +19,5 @@ particles::particles(
     _cell_particles[cells[p]].push_back(p);
 
   // Copy position data to first field
-  std::copy(x.data(), x.data() + x.rows() * x.cols(), _field_data[0].begin());
+  std::copy(x.data(), x.data() + x.rows() * 3, _field_data[0].begin());
 }
