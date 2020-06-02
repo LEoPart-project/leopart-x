@@ -1,7 +1,4 @@
 #include <Eigen/Dense>
-#include <dolfinx.h>
-
-#include "ValueLayout.h"
 
 #pragma once
 
@@ -14,7 +11,7 @@ public:
   particles(const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> &x,
             const std::vector<int> &cells);
 
-  /// Get the data for a given field (index idx) on particle p.
+  /// Get the data for a given field (index idx) on particle p (non-const)
   Eigen::Map<Eigen::VectorXd> data(int p, int idx) {
     int size = _field_shape[idx][0];
     if (_field_shape[idx].size() > 1)
@@ -23,6 +20,7 @@ public:
                                        size);
   }
 
+  /// Get the data for a given field (index idx) on particle p (const)
   Eigen::Map<const Eigen::VectorXd> data(int p, int idx) const {
     int size = _field_shape[idx][0];
     if (_field_shape[idx].size() > 1)
