@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/eigen3",
+                "/usr/include/mpi",
+                "/opt/packages/petsc-3.12.0/include",
+                "/opt/packages/pybind11-2.4.3/include",
+                "/usr/include/python3.6m",
+                "/home/chris/.local/lib/python3.6/site-packages/petsc4py/include",
+                "/home/chris/.local/lib/python3.6/site-packages/mpi4py/include",
+                "/home/chris/FEniCS/lib/python3.6/site-packages/fenics_ffcx-2019.2.0.dev0-py3.6.egg/ffcx/codegeneration/"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64",
+            "configurationProvider": "vector-of-bool.cmake-tools"
+        }
+    ],
+    "version": 4
+}
