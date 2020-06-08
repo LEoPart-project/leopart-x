@@ -14,6 +14,19 @@ public:
   particles(const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>& x,
             const std::vector<int>& cells);
 
+  void add_field(std::string name, const std::vector<int>& shape)
+  {
+    _field_name.push_back(name);
+    _field_shape.push_back(shape);
+    int fs = 1;
+    for (int q : shape)
+      fs *= q;
+    int np = 0;
+    for (std::vector<int>& q : _cell_particles)
+      np += q.size();
+    _field_data.push_back(std::vector<double>(np * fs));
+  }
+
   /// Get the data for a given field (index idx) on particle p (non-const)
   Eigen::Map<Eigen::VectorXd> data(int p, int idx)
   {
@@ -34,10 +47,12 @@ public:
                                              size);
   }
 
-  const std::vector<int>& cell_particles(int c) const
+  const std::vector<std::vector<int>>& cell_particles() const
   {
-    return _cell_particles[c];
+    return _cell_particles;
   }
+
+  const std::vector<int>& field_shape(int i) const { return _field_shape[i]; }
 
 private:
   // Indices of particles in each cell.

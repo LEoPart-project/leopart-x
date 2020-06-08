@@ -1,8 +1,23 @@
 
 #include "generation.h"
 #include <Eigen/Dense>
+#include <dolfinx.h>
 
 using namespace leopart;
+
+void generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
+{
+  const int tdim = mesh.topology().dim();
+  const int num_cells = mesh.topology().index_map(tdim)->size_local();
+  for (int i = 0; i < num_cells; ++i)
+  {
+    // Calculate cell volume
+    // number of particles = int(density * volume)
+    // get random X values
+    // Convert to physical x values
+    // append to list
+  }
+}
 
 Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>
 generation::random_reference_triangle(int n)
