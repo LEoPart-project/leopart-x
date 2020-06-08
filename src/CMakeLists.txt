@@ -14,7 +14,7 @@ if (NOT TARGET dolfinx)
 endif()
 
 # Executable
-add_library(${PROJECT_NAME} SHARED particles.cpp)
+add_library(${PROJECT_NAME} SHARED particles.cpp generation.cpp)
 
 # Set C++17 standard
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)

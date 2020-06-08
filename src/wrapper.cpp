@@ -1,4 +1,5 @@
 
+#include "generation.h"
 #include "particles.h"
 
 #include <pybind11/eigen.h>
@@ -16,4 +17,7 @@ PYBIND11_MODULE(pyleopart, m)
                     const std::vector<int>&>())
       .def("data", py::overload_cast<int, int>(&particles::particles::data))
       .def("cell_particles", &particles::particles::cell_particles);
+
+  m.def("random_tet", &generation::random_reference_tetrahedron);
+  m.def("random_tri", &generation::random_reference_triangle);
 }
