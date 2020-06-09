@@ -1,13 +1,11 @@
-#include "particles.h"
+#include "Particles.h"
 #include <dolfinx.h>
 
 using namespace leopart;
 
-particles::particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+Particles::Particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                                         Eigen::RowMajor>& x,
                      const std::vector<int>& cells)
-    : _field_name({"x"}), _field_shape({{(int)x.cols()}}),
-      _field_data({std::vector<double>(x.rows() * x.cols())})
 {
   // Find max cell index, and create cell->particle map
   auto max_cell_it = std::max_element(cells.begin(), cells.end());
@@ -18,6 +16,17 @@ particles::particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
   for (std::size_t p = 0; p < cells.size(); ++p)
     _cell_particles[cells[p]].push_back(p);
 
-  // Copy position data to first field
-  std::copy(x.data(), x.data() + x.rows() * x.cols(), _field_data[0].begin());
+  Field fx("x", {{(int)x.cols()}}, x.rows());
+  for (int i = 0; i < x.rows(); ++i)
+    fx.data(i) = x.row(i);
+  _fields.push_back(fx);
+}
+
+void Particles::add_field(std::string name, const std::vector<int>& shape)
+{
+  int np = 0;
+  for (std::vector<int>& q : _cell_particles)
+    np += q.size();
+  Field f(name, shape, np);
+  _fields.push_back(f);
 }

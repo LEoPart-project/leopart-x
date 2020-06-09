@@ -2,6 +2,7 @@
 #include "generation.h"
 #include <Eigen/Dense>
 #include <dolfinx.h>
+#include <iostream>
 
 using namespace leopart;
 
@@ -36,7 +37,11 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
   {
     // Number of particles = int(density * volume)
     int np = (int)(density * vol[i]);
-    // FIXME: Warn if too large or small
+    // Warn if too large or small
+    if (np < 5)
+      std::cout << "Warning: np < 5 in cell " << i << "\n";
+    if (np > 50)
+      std::cout << "Warning: np > 50 in cell " << i << "\n";
 
     // get random X values
     Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> X

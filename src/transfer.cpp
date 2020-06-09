@@ -1,11 +1,11 @@
 #include "transfer.h"
-#include "particles.h"
+#include "Particles.h"
 #include <dolfinx.h>
 
 using namespace leopart;
 
 void transfer::transfer_to_function(
-    std::shared_ptr<dolfinx::function::Function> f, const particles& pax,
+    std::shared_ptr<dolfinx::function::Function> f, const Particles& pax,
     int value_index,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
@@ -61,7 +61,7 @@ void transfer::transfer_to_function(
 }
 
 void transfer::transfer_to_particles(
-    particles& pax, std::shared_ptr<const dolfinx::function::Function> f,
+    Particles& pax, std::shared_ptr<const dolfinx::function::Function> f,
     int value_index,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
@@ -75,7 +75,7 @@ void transfer::transfer_to_particles(
   const int space_dimension = element->space_dimension();
   assert(basis_values.cols() == value_size * space_dimension);
   int field_size = 1;
-  for (int q : pax.field_shape(value_index))
+  for (int q : pax.field(value_index).shape())
     field_size *= q;
   assert(field_size == value_size);
 
@@ -114,7 +114,7 @@ void transfer::transfer_to_particles(
 
 Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
 transfer::get_particle_contributions(
-    const particles& pax,
+    const Particles& pax,
     const dolfinx::function::FunctionSpace& function_space)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = function_space.mesh();

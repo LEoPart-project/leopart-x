@@ -1,6 +1,6 @@
 
+#include "Particles.h"
 #include "generation.h"
-#include "particles.h"
 #include "transfer.h"
 
 #include <pybind11/eigen.h>
@@ -12,13 +12,13 @@ namespace py = pybind11;
 using namespace leopart;
 PYBIND11_MODULE(pyleopart, m)
 {
-  py::class_<particles>(m, "particles")
+  py::class_<Particles>(m, "Particles")
       .def(py::init<const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                                        Eigen::RowMajor>&,
                     const std::vector<int>&>())
-      .def("add_field", &particles::particles::add_field)
-      .def("data", py::overload_cast<int, int>(&particles::particles::data))
-      .def("cell_particles", &particles::particles::cell_particles);
+      .def("add_field", &Particles::Particles::add_field)
+      .def("data", py::overload_cast<int, int>(&Particles::Particles::data))
+      .def("cell_particles", &Particles::Particles::cell_particles);
 
   // Generation functions
   m.def("random_tet", &generation::random_reference_tetrahedron);

@@ -11,7 +11,7 @@ ppc = 10
 x, cells = mesh_fill(mesh, ncell*ppc)
 print(len(x))
     
-p = particles(x, cells)
+p = Particles(x, cells)
 p.add_field("w", [2])
 p.add_field("v", [2])
 
