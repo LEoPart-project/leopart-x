@@ -11,7 +11,8 @@ class particles
 public:
   /// Initialise particles with position and the index of the cell which
   /// contains them.
-  particles(const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>& x,
+  particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+                               Eigen::RowMajor>& x,
             const std::vector<int>& cells);
 
   void add_field(std::string name, const std::vector<int>& shape)

@@ -32,6 +32,7 @@ void transfer::transfer_to_function(
 
   dolfinx::la::VecWrapper x(f->vector().vec());
 
+  int idx = 0;
   for (int c = 0; c < ncells; ++c)
   {
     const int np = cell_particles[c].size();
@@ -43,7 +44,7 @@ void transfer::transfer_to_function(
       int pidx = cell_particles[c][p];
       Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
                                      Eigen::RowMajor>>
-          basis(basis_values.row(pidx).data(), space_dimension, value_size);
+          basis(basis_values.row(idx++).data(), space_dimension, value_size);
 
       q.block(0, p * value_size, space_dimension, value_size) = basis;
       f.segment(p * value_size, value_size) = pax.data(pidx, value_index);
@@ -91,21 +92,20 @@ void transfer::transfer_to_particles(
 
   dolfinx::la::VecReadWrapper x(f->vector().vec());
 
+  int idx = 0;
   for (int c = 0; c < ncells; ++c)
   {
     auto dofs = dm->cell_dofs(c);
     Eigen::VectorXd vals(dofs.size());
     for (int k = 0; k < dofs.size(); ++k)
       vals[k] = x.x[dofs[k]];
-    const int np = cell_particles[c].size();
-    for (int k = 0; k < np; ++k)
+    for (int pidx : cell_particles[c])
     {
-      int pidx = cell_particles[c][k];
       Eigen::Map<Eigen::VectorXd> ptr = pax.data(pidx, value_index);
       ptr.setZero();
       Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
                                      Eigen::ColMajor>>
-          q(basis_values.row(pidx).data(), value_size, space_dimension);
+          q(basis_values.row(idx++).data(), value_size, space_dimension);
 
       ptr = q * vals;
     }
@@ -162,6 +162,7 @@ transfer::get_particle_contributions(
   Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       basis_data(nparticles, space_dimension * value_size);
 
+  int p = 0;
   for (int c = 0; c < ncells; ++c)
   {
     int np = cell_particles[c].size();
@@ -199,14 +200,12 @@ transfer::get_particle_contributions(
     element->transform_reference_basis(basis_values, basis_reference_values, X,
                                        J, detJ, K, cell_info[c]);
 
-    // Copy basis data into particle order
-    for (int i = 0; i < np; ++i)
-    {
-      int p = cell_particles[c][i];
-      std::copy(basis_values.data() + i * space_dimension * value_size,
-                basis_values.data() + (i + 1) * space_dimension * value_size,
-                basis_data.row(p).data());
-    }
+    // FIXME: avoid copy by using Eigen::TensorMap
+    // Copy basis data
+    std::copy(basis_values.data(),
+              basis_values.data() + np * space_dimension * value_size,
+              basis_data.row(p).data());
+    p += np;
   }
 
   return basis_data;

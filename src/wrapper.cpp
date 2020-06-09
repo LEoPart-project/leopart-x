@@ -23,6 +23,7 @@ PYBIND11_MODULE(pyleopart, m)
   // Generation functions
   m.def("random_tet", &generation::random_reference_tetrahedron);
   m.def("random_tri", &generation::random_reference_triangle);
+  m.def("mesh_fill", &generation::mesh_fill);
 
   // Transfer functions
   m.def("get_particle_contributions", &transfer::get_particle_contributions);

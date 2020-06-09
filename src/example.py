@@ -4,21 +4,16 @@ from mpi4py import MPI
 from pyleopart import *
 import numpy as np
 
-x = np.random.rand(500,3)
-x[:,2] = 0
-
 mesh = UnitSquareMesh(MPI.COMM_WORLD, 4, 4)
-tree = dolfinx.geometry.BoundingBoxTree(mesh, mesh.topology.dim)
-cells = []
-for p in x:
-    cell = dolfinx.geometry.compute_colliding_cells(tree, mesh, p)[0]
-    cells.append(cell)
+ncell = mesh.topology.index_map(2).size_local
+print("ncells = ", ncell)
+ppc = 10
+x, cells = mesh_fill(mesh, ncell*ppc)
+print(len(x))
     
 p = particles(x, cells)
-p.add_field("w", [2]);
-p.add_field("v", [2]);
-
-print(p)
+p.add_field("w", [2])
+p.add_field("v", [2])
 
 Q = VectorFunctionSpace(mesh, ("DG", 2))
 
@@ -41,4 +36,4 @@ transfer_to_function(u._cpp_object, p, 2, arr)
 transfer_to_particles(p, u._cpp_object, 1, arr)
 
 # Examine fields "v" and "x" (position)
-print(p.data(0, 1), p.data(0, 0)**2);
+print(p.data(0, 1), p.data(0, 0)**2)
