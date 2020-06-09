@@ -13,5 +13,7 @@ for i in range(3):
     print(p.field("x").data(i))
 print(p.cell_particles()[0])
 
+print(p.field("x").value_shape)
+
 for i in p.cell_particles()[0]:
     print(i, p.field("x").data(i))

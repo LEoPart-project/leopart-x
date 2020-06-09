@@ -25,6 +25,14 @@ public:
     return _cell_particles;
   }
 
+  /// Add a particle to a cell
+  /// @return New particle index
+  int add_particle(const Eigen::VectorXd& x, int cell);
+
+  /// Delete particle p in cell
+  /// @note p is cell-local index
+  void delete_particle(int cell, int p);
+
   /// Field access (const)
   const Field& field(int i) const { return _fields[i]; }
 
@@ -46,6 +54,9 @@ public:
 private:
   // Indices of particles in each cell.
   std::vector<std::vector<int>> _cell_particles;
+
+  // List of particles which have been deleted, and available for reallocation
+  std::vector<int> _free_list;
 
   // Data in fields over particles
   std::vector<Field> _fields;
