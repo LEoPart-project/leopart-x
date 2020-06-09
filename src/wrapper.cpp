@@ -12,12 +12,20 @@ namespace py = pybind11;
 using namespace leopart;
 PYBIND11_MODULE(pyleopart, m)
 {
+  py::class_<Field>(m, "Field")
+      .def("data", py::overload_cast<int>(&Field::Field::data),
+           py::return_value_policy::reference_internal);
+
   py::class_<Particles>(m, "Particles")
       .def(py::init<const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                                        Eigen::RowMajor>&,
                     const std::vector<int>&>())
       .def("add_field", &Particles::Particles::add_field)
-      .def("data", py::overload_cast<int, int>(&Particles::Particles::data))
+      .def("data",
+           [](Particles& self, int p, int f) { return self.field(f).data(p); })
+      .def("field",
+           py::overload_cast<std::string>(&Particles::Particles::field),
+           py::return_value_policy::reference_internal)
       .def("cell_particles", &Particles::Particles::cell_particles);
 
   // Generation functions

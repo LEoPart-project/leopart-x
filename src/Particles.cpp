@@ -27,6 +27,11 @@ void Particles::add_field(std::string name, const std::vector<int>& shape)
   int np = 0;
   for (std::vector<int>& q : _cell_particles)
     np += q.size();
+
+  for (const Field& f : _fields)
+    if (name == f.name)
+      throw std::runtime_error("Field name \"" + name + "\" already in use");
+
   Field f(name, shape, np);
   _fields.push_back(f);
 }

@@ -19,24 +19,29 @@ public:
   /// Add a field to the particles, with name and value shape
   void add_field(std::string name, const std::vector<int>& shape);
 
-  /// Get the data for a given field (index idx) on particle p (non-const)
-  Eigen::Map<Eigen::VectorXd> data(int p, int idx)
-  {
-    return _fields[idx].data(p);
-  }
-
-  /// Get the data for a given field (index idx) on particle p (const)
-  Eigen::Map<const Eigen::VectorXd> data(int p, int idx) const
-  {
-    return _fields[idx].data(p);
-  }
-
+  /// List of particles in each cell
   const std::vector<std::vector<int>>& cell_particles() const
   {
     return _cell_particles;
   }
 
+  /// Field access (const)
   const Field& field(int i) const { return _fields[i]; }
+
+  /// Field access (non-const)
+  Field& field(int i) { return _fields[i]; }
+
+  /// Access field by name (convenience)
+  /// Used in Python wrapper
+  Field& field(std::string w)
+  {
+    for (Field& f : _fields)
+    {
+      if (f.name == w)
+        return f;
+    }
+    throw std::runtime_error("Field not found");
+  }
 
 private:
   // Indices of particles in each cell.

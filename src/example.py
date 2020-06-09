@@ -35,5 +35,5 @@ transfer_to_function(u._cpp_object, p, 2, arr)
 # Transfer from Function "u" to field "w"
 transfer_to_particles(p, u._cpp_object, 1, arr)
 
-# Examine fields "v" and "x" (position)
-print(p.data(0, 1), p.data(0, 0)**2)
+# Examine fields "w" and "x" (position)
+print(p.field("w").data(0), p.field("x").data(0)**2)

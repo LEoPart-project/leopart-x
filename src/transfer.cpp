@@ -47,7 +47,7 @@ void transfer::transfer_to_function(
           basis(basis_values.row(idx++).data(), space_dimension, value_size);
 
       q.block(0, p * value_size, space_dimension, value_size) = basis;
-      f.segment(p * value_size, value_size) = pax.data(pidx, value_index);
+      f.segment(p * value_size, value_size) = pax.field(value_index).data(pidx);
     }
 
     Eigen::VectorXd u_i = (q * q.transpose()).ldlt().solve(q * f);
@@ -101,7 +101,7 @@ void transfer::transfer_to_particles(
       vals[k] = x.x[dofs[k]];
     for (int pidx : cell_particles[c])
     {
-      Eigen::Map<Eigen::VectorXd> ptr = pax.data(pidx, value_index);
+      Eigen::Map<Eigen::VectorXd> ptr = pax.field(value_index).data(pidx);
       ptr.setZero();
       Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
                                      Eigen::ColMajor>>
@@ -191,7 +191,7 @@ transfer::get_particle_contributions(
     Eigen::Tensor<double, 3, Eigen::RowMajor> K(np, tdim, gdim);
 
     for (int i = 0; i < np; ++i)
-      x.row(i) = pax.data(cell_particles[c][i], 0).head(gdim);
+      x.row(i) = pax.field(0).data(cell_particles[c][i]).head(gdim);
 
     cmap.compute_reference_geometry(X, J, detJ, K, x, coordinate_dofs);
     // Compute basis on reference element
