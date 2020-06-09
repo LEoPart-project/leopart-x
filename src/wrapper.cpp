@@ -23,6 +23,8 @@ PYBIND11_MODULE(pyleopart, m)
                                        Eigen::RowMajor>&,
                     const std::vector<int>&>())
       .def("add_field", &Particles::Particles::add_field)
+      .def("add_particle", &Particles::Particles::add_particle)
+      .def("delete_particle", &Particles::Particles::delete_particle)
       .def("data",
            [](Particles& self, int p, int f) { return self.field(f).data(p); })
       .def("field",

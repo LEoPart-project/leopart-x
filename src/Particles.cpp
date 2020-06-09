@@ -40,9 +40,9 @@ int Particles::add_particle(const Eigen::VectorXd& x, int cell)
   {
     pidx = _free_list.back();
     _free_list.pop_back();
-    _cell_particles[cell].push_back(pidx);
   }
-  // Set "x"
+
+  _cell_particles[cell].push_back(pidx);
   _fields[0].data(pidx) = x;
   return pidx;
 }

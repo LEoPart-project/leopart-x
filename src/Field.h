@@ -44,8 +44,11 @@ public:
   std::string name;
 
 private:
+  // Shape
   std::vector<int> _shape;
   int _value_size;
+
+  // Storage, using vector because it is easier to resize.
   std::vector<double> _data;
 };
 } // namespace leopart
