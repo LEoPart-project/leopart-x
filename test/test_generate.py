@@ -13,5 +13,4 @@ def test_simple_mesh_fill():
     x0 = x[0,:]
     p = pyleopart.Particles(x, c)
     assert((p.field("x").data(0)==x0).all())
-    for row in p.cell_particles():
-        print(len(row))
+

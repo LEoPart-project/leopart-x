@@ -11,7 +11,7 @@ using namespace leopart;
 
 void transfer::transfer_to_function(
     std::shared_ptr<dolfinx::function::Function> f, const Particles& pax,
-    int field_index,
+    const Field& field,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
 {
@@ -52,7 +52,7 @@ void transfer::transfer_to_function(
           basis(basis_values.row(idx++).data(), space_dimension, value_size);
 
       q.block(0, p * value_size, space_dimension, value_size) = basis;
-      f.segment(p * value_size, value_size) = pax.field(field_index).data(pidx);
+      f.segment(p * value_size, value_size) = field.data(pidx);
     }
 
     Eigen::VectorXd u_i = (q * q.transpose()).ldlt().solve(q * f);
@@ -66,8 +66,8 @@ void transfer::transfer_to_function(
 }
 
 void transfer::transfer_to_particles(
-    Particles& pax, std::shared_ptr<const dolfinx::function::Function> f,
-    int field_index,
+    Particles& pax, Field& field,
+    std::shared_ptr<const dolfinx::function::Function> f,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
 {
@@ -80,7 +80,7 @@ void transfer::transfer_to_particles(
   const int space_dimension = element->space_dimension();
   assert(basis_values.cols() == value_size * space_dimension);
   int field_size = 1;
-  for (int q : pax.field(field_index).shape())
+  for (int q : field.shape())
     field_size *= q;
   assert(field_size == value_size);
 
@@ -106,7 +106,7 @@ void transfer::transfer_to_particles(
       vals[k] = x.x[dofs[k]];
     for (int pidx : cell_particles[c])
     {
-      Eigen::Map<Eigen::VectorXd> ptr = pax.field(field_index).data(pidx);
+      Eigen::Map<Eigen::VectorXd> ptr = field.data(pidx);
       ptr.setZero();
       Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
                                      Eigen::ColMajor>>

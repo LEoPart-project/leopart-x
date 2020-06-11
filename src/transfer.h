@@ -3,6 +3,7 @@
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
+#include "Field.h"
 #include "Particles.h"
 #include <dolfinx.h>
 
@@ -22,13 +23,13 @@ get_particle_contributions(
 /// dolfinx Function
 void transfer_to_function(
     std::shared_ptr<dolfinx::function::Function> f, const Particles& pax,
-    int value_index,
+    const Field& field,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
 
 void transfer_to_particles(
-    Particles& pax, std::shared_ptr<const dolfinx::function::Function> f,
-    int value_index,
+    Particles& pax, Field& field,
+    std::shared_ptr<const dolfinx::function::Function> f,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
 } // namespace transfer
