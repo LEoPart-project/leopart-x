@@ -12,3 +12,5 @@ jobs:
     - uses: actions/checkout@v2
     - name: build
       run: cd src && python3 setup.py install
+    - name: test
+      run: cd test && python3 -m pytest -s -v .
