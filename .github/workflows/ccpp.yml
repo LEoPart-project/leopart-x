@@ -11,4 +11,4 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: build
-      run: cd src && cmake . && make
+      run: cd src && python3 setup.py install
