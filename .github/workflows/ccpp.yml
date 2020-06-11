@@ -6,7 +6,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    container: fenicsproject/dolfinx:latest
+    container: dolfinx/real:latest
 
     steps:
     - uses: actions/checkout@v2
