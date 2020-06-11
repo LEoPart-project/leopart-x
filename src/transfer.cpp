@@ -79,10 +79,7 @@ void transfer::transfer_to_particles(
   const int value_size = element->value_size();
   const int space_dimension = element->space_dimension();
   assert(basis_values.cols() == value_size * space_dimension);
-  int field_size = 1;
-  for (int q : field.shape())
-    field_size *= q;
-  assert(field_size == value_size);
+  assert(field.value_size() == value_size);
 
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = f->function_space()->mesh();
   const int tdim = mesh->topology().dim();

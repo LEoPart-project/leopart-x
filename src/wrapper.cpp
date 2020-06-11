@@ -19,7 +19,8 @@ PYBIND11_MODULE(pyleopart, m)
   py::class_<Field>(m, "Field")
       .def("data", py::overload_cast<int>(&Field::Field::data),
            py::return_value_policy::reference_internal)
-      .def_property_readonly("value_shape", &Field::Field::shape)
+      .def_property_readonly("value_shape", &Field::Field::value_shape)
+      .def_property_readonly("value_size", &Field::Field::value_size)
       .def_readonly("name", &Field::Field::name);
 
   py::class_<Particles>(m, "Particles")
