@@ -48,7 +48,7 @@ public:
       if (f.name == w)
         return f;
     }
-    throw std::runtime_error("Field not found");
+    throw std::out_of_range("Field not found");
   }
 
 private:

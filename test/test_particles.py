@@ -1,6 +1,7 @@
 
 import numpy as np
 import pyleopart
+import pytest
 
 
 def test_simple_create():
@@ -20,7 +21,11 @@ def test_add_field():
     p.add_field("w", [3])
     assert(p.field("w").value_shape == [3])
     p.add_field("u", [3, 2])   
-    assert(p.field("u").value_shape == [3, 2])
+    u = p.field("u")
+    assert(u.value_shape == [3, 2])
+    assert(u.value_size == 6)
+    with pytest.raises(IndexError):
+        r = p.field("r")
 
 
 def test_add_delete_particles():
