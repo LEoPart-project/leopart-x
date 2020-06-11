@@ -1,3 +1,8 @@
+// Copyright: (c) 2020 Chris Richardson and Jakob Maljaars
+// This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+// License: GNU Lesser GPL version 3 or any later version
+// SPDX-License-Identifier:    LGPL-3.0-or-later
+
 #include "Particles.h"
 #include <cassert>
 #include <dolfinx.h>
@@ -25,6 +30,7 @@ Particles::Particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
 
 int Particles::add_particle(const Eigen::VectorXd& x, int cell)
 {
+  assert(cell < _cell_particles.size());
   assert(x.size() == _fields[0].shape()[0]);
   int pidx;
   if (_free_list.empty())
@@ -59,14 +65,11 @@ void Particles::delete_particle(int cell, int p)
 
 void Particles::add_field(std::string name, const std::vector<int>& shape)
 {
-  int np = 0;
-  for (std::vector<int>& q : _cell_particles)
-    np += q.size();
-
   for (const Field& f : _fields)
     if (name == f.name)
       throw std::runtime_error("Field name \"" + name + "\" already in use");
 
-  Field f(name, shape, np);
+  // Give the field the same number of entries as "x" (which must exist)
+  Field f(name, shape, _fields[0].size());
   _fields.push_back(f);
 }
