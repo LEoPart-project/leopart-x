@@ -12,17 +12,7 @@ if sys.version_info < (3, 5):
     print("Python 3.5 or higher required, please upgrade.")
     sys.exit(1)
 
-VERSION = "2019.2.0.dev0"
-RESTRICT_REQUIREMENTS = ">=2019.2.0.dev0,<2019.3"
-
-REQUIREMENTS = [
-    "numpy",
-    "mpi4py",
-    "petsc4py",
-    "fenics-ffcx",
-    "fenics-ufl{}".format(RESTRICT_REQUIREMENTS),
-]
-
+VERSION = "0.1"
 
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=''):
@@ -77,7 +67,7 @@ setup(name='leopart',
       author='LEoPart-X Project',
       description='LEoPart Python interface',
       long_description='',
-      packages=["pyleopart"],
+      packages=["leopart"],
       package_data={'dolfinx.wrappers': ['*.h']},
       ext_modules=[CMakeExtension('pyleopart')],
       cmdclass=dict(build_ext=CMakeBuild),
