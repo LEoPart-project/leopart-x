@@ -9,6 +9,7 @@
 
 using namespace leopart;
 
+//------------------------------------------------------------------------
 void transfer::transfer_to_function(
     std::shared_ptr<dolfinx::function::Function> f, const Particles& pax,
     const Field& field,
@@ -64,7 +65,7 @@ void transfer::transfer_to_function(
       x.x[dofs[i]] = u_i[i];
   }
 }
-
+//------------------------------------------------------------------------
 void transfer::transfer_to_particles(
     Particles& pax, Field& field,
     std::shared_ptr<const dolfinx::function::Function> f,
@@ -101,6 +102,7 @@ void transfer::transfer_to_particles(
     Eigen::VectorXd vals(dofs.size());
     for (int k = 0; k < dofs.size(); ++k)
       vals[k] = x.x[dofs[k]];
+    // Loop over particles in cell and evaluate basis functions q and values
     for (int pidx : cell_particles[c])
     {
       Eigen::Map<Eigen::VectorXd> ptr = field.data(pidx);
@@ -113,7 +115,7 @@ void transfer::transfer_to_particles(
     }
   }
 }
-
+//------------------------------------------------------------------------
 Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
 transfer::get_particle_contributions(
     const Particles& pax,
