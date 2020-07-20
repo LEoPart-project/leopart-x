@@ -30,7 +30,7 @@ public:
   int add_particle(const Eigen::VectorXd& x, int cell);
 
   /// Delete particle p in cell
-  /// @note p is cell-local index
+  /// @note \p p is cell-local index
   void delete_particle(int cell, int p);
 
   /// Field access (const)

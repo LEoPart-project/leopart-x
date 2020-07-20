@@ -28,6 +28,8 @@ void transfer_to_function(
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
 
+/// Transfer information from the FE \p field to the particles by
+/// evaluating dofs at particle positions.
 template <typename T>
 void transfer_to_particles(
     Particles& pax, Field& field,
