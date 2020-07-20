@@ -10,8 +10,8 @@
 using namespace leopart;
 
 void transfer::transfer_to_function(
-    std::shared_ptr<dolfinx::function::Function> f, const Particles& pax,
-    const Field& field,
+    std::shared_ptr<dolfinx::function::Function<PetscScalar>> f,
+    const Particles& pax, const Field& field,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
 {
@@ -35,7 +35,9 @@ void transfer::transfer_to_function(
   std::shared_ptr<const dolfinx::fem::DofMap> dm
       = f->function_space()->dofmap();
 
-  dolfinx::la::VecWrapper x(f->vector().vec());
+  // Vector of expansion_coefficients to be set
+  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>& expansion_coefficients
+      = f->x()->array();
 
   int idx = 0;
   for (int c = 0; c < ncells; ++c)
@@ -43,7 +45,7 @@ void transfer::transfer_to_function(
     const int np = cell_particles[c].size();
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> q(
         space_dimension, np * value_size);
-    Eigen::VectorXd f(np * value_size);
+    Eigen::VectorXd l(np * value_size);
     for (int p = 0; p < np; ++p)
     {
       int pidx = cell_particles[c][p];
@@ -52,22 +54,24 @@ void transfer::transfer_to_function(
           basis(basis_values.row(idx++).data(), space_dimension, value_size);
 
       q.block(0, p * value_size, space_dimension, value_size) = basis;
-      f.segment(p * value_size, value_size) = field.data(pidx);
+      l.segment(p * value_size, value_size) = field.data(pidx);
     }
 
-    Eigen::VectorXd u_i = (q * q.transpose()).ldlt().solve(q * f);
+    Eigen::VectorXd u_i = (q * q.transpose()).ldlt().solve(q * l);
     auto dofs = dm->cell_dofs(c);
 
     assert(dofs.size() == space_dimension);
 
     for (int i = 0; i < dofs.size(); ++i)
-      x.x[dofs[i]] = u_i[i];
+    {
+      expansion_coefficients[dofs[i]] = u_i[i];
+    }
   }
 }
 
 void transfer::transfer_to_particles(
     Particles& pax, Field& field,
-    std::shared_ptr<const dolfinx::function::Function> f,
+    std::shared_ptr<const dolfinx::function::Function<PetscScalar>> f,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
 {
@@ -92,7 +96,9 @@ void transfer::transfer_to_particles(
   std::shared_ptr<const dolfinx::fem::DofMap> dm
       = f->function_space()->dofmap();
 
-  dolfinx::la::VecReadWrapper x(f->vector().vec());
+  // Const array of expansion coefficients
+  const Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>& f_array
+      = f->x()->array();
 
   int idx = 0;
   for (int c = 0; c < ncells; ++c)
@@ -100,7 +106,9 @@ void transfer::transfer_to_particles(
     auto dofs = dm->cell_dofs(c);
     Eigen::VectorXd vals(dofs.size());
     for (int k = 0; k < dofs.size(); ++k)
-      vals[k] = x.x[dofs[k]];
+    {
+      vals[k] = f_array[dofs[k]];
+    }
     for (int pidx : cell_particles[c])
     {
       Eigen::Map<Eigen::VectorXd> ptr = field.data(pidx);

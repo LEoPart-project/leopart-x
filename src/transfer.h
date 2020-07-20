@@ -22,14 +22,14 @@ get_particle_contributions(
 /// Use basis values to transfer function from field given by value_index to
 /// dolfinx Function
 void transfer_to_function(
-    std::shared_ptr<dolfinx::function::Function> f, const Particles& pax,
-    const Field& field,
+    std::shared_ptr<dolfinx::function::Function<PetscScalar>> f,
+    const Particles& pax, const Field& field,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
 
 void transfer_to_particles(
     Particles& pax, Field& field,
-    std::shared_ptr<const dolfinx::function::Function> f,
+    std::shared_ptr<const dolfinx::function::Function<PetscScalar>> f,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
 } // namespace transfer
