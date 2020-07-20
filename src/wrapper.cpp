@@ -38,7 +38,8 @@ PYBIND11_MODULE(pyleopart, m)
       .def("field",
            py::overload_cast<std::string>(&Particles::Particles::field),
            py::return_value_policy::reference_internal)
-      .def("cell_particles", &Particles::Particles::cell_particles);
+      .def("cell_particles", py::overload_cast<>(&Particles::Particles::cell_particles, py::const_))
+      .def("cell_particles", py::overload_cast<const int>(&Particles::Particles::cell_particles, py::const_));
 
   // Generation functions
   m.def("random_tet", &generation::random_reference_tetrahedron);

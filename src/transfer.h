@@ -36,6 +36,14 @@ void transfer_to_particles(
     std::shared_ptr<const dolfinx::function::Function<T>> f,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
+
+/// Evaluate the basis functions at particle positions in a prescribed cell
+void eval_particle_cell_contributions(
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& q,
+    Eigen::VectorXd& l, int* row_idx, const Particles& pax, const Field& field,
+    const int cidx, const int value_size, const int space_dimension,
+    const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
+        basis_values);
 //----------------------------------------------------------------------------
 template <typename T>
 void transfer_to_function(
@@ -48,9 +56,6 @@ void transfer_to_function(
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = f->function_space()->mesh();
   const int tdim = mesh->topology().dim();
   int ncells = mesh->topology().index_map(tdim)->size_local();
-
-  // Get particles in each cell
-  const std::vector<std::vector<int>>& cell_particles = pax.cell_particles();
 
   // Get element
   assert(f->function_space()->element());
@@ -67,24 +72,15 @@ void transfer_to_function(
   // Vector of expansion_coefficients to be set
   Eigen::Matrix<T, Eigen::Dynamic, 1>& expansion_coefficients = f->x()->array();
 
-  int idx = 0;
+  int row_idx = 0;
   for (int c = 0; c < ncells; ++c)
   {
-    const int np = cell_particles[c].size();
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> q(
-        space_dimension, np * value_size);
-    Eigen::VectorXd l(np * value_size);
-    for (int p = 0; p < np; ++p)
-    {
-      int pidx = cell_particles[c][p];
-      Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
-                                     Eigen::RowMajor>>
-          basis(basis_values.row(idx++).data(), space_dimension, value_size);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> q;
+    Eigen::VectorXd l;
+    eval_particle_cell_contributions(q, l, &row_idx, pax, field, c, value_size,
+                                     space_dimension, basis_values);
 
-      q.block(0, p * value_size, space_dimension, value_size) = basis;
-      l.segment(p * value_size, value_size) = field.data(pidx);
-    }
-
+    // Do l2 projection
     Eigen::VectorXd u_i = (q * q.transpose()).ldlt().solve(q * l);
     auto dofs = dm->cell_dofs(c);
 
@@ -147,6 +143,33 @@ void transfer_to_particles(
 
       ptr = q * vals;
     }
+  }
+}
+//----------------------------------------------------------------------------
+
+void eval_particle_cell_contributions(
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& q,
+    Eigen::VectorXd& l, int* row_idx, const Particles& pax, const Field& field,
+    const int cidx, const int value_size, const int space_dimension,
+    const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
+        basis_values)
+{
+  // Get particles in cell cidx
+  const std::vector<int>& cell_particles = pax.cell_particles(cidx);
+  int np = cell_particles.size();
+  q.resize(space_dimension, np * value_size);
+  l.resize(np * value_size);
+
+  for (int p = 0; p < np; ++p)
+  {
+    int pidx = cell_particles[p];
+    Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
+                                   Eigen::RowMajor>>
+        basis(basis_values.row((*row_idx)++).data(), space_dimension,
+              value_size);
+
+    q.block(0, p * value_size, space_dimension, value_size) = basis;
+    l.segment(p * value_size, value_size) = field.data(pidx);
   }
 }
 } // namespace transfer
