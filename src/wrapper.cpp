@@ -3,10 +3,13 @@
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
+#include "Field.h"
 #include "Particles.h"
 #include "generation.h"
 #include "transfer.h"
 
+#include <dolfinx.h>
+#include <memory>
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -44,6 +47,18 @@ PYBIND11_MODULE(pyleopart, m)
 
   // Transfer functions
   m.def("get_particle_contributions", &transfer::get_particle_contributions);
-  m.def("transfer_to_particles", &transfer::transfer_to_particles);
-  m.def("transfer_to_function", &transfer::transfer_to_function);
+  m.def("transfer_to_particles",
+        py::overload_cast<
+            Particles&, Field&,
+            std::shared_ptr<const dolfinx::function::Function<PetscScalar>>,
+            const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+                               Eigen::RowMajor>&>(
+            &transfer::transfer_to_particles<PetscScalar>));
+  m.def("transfer_to_function",
+        py::overload_cast<
+            std::shared_ptr<dolfinx::function::Function<PetscScalar>>,
+            const Particles&, const Field&,
+            const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+                               Eigen::RowMajor>&>(
+            &transfer::transfer_to_function<PetscScalar>));
 }

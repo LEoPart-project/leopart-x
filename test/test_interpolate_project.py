@@ -35,4 +35,5 @@ def test_interpolate_project():
     pyleopart.transfer_to_particles(p, w, u._cpp_object, pbasis)
 
     # Compare fields "w" and "x"(squared)
-    assert np.isclose(p.field("w").data(0), p.field("x").data(0)**2).all()
+    for pidx in range(len(x)):
+        assert np.isclose(p.field("w").data(pidx), p.field("x").data(pidx)**2).all()
