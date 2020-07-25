@@ -37,7 +37,9 @@ void transfer_to_particles(
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
 
-/// Evaluate the basis functions at particle positions in a prescribed cell
+/// Evaluate the basis functions at particle positions in a prescribed cell.
+/// Writes results to an Eigen::Matrix \f$q\f$ and Eigen::Vector \f$f\f$ to
+/// compose the l2 problem \f$q q^T = q f\f$.
 void eval_particle_cell_contributions(
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& q,
     Eigen::VectorXd& l, int* row_idx, const Particles& pax, const Field& field,
@@ -80,7 +82,7 @@ void transfer_to_function(
     eval_particle_cell_contributions(q, l, &row_idx, pax, field, c, value_size,
                                      space_dimension, basis_values);
 
-    // Do l2 projection
+    // Solve projection
     Eigen::VectorXd u_i = (q * q.transpose()).ldlt().solve(q * l);
     auto dofs = dm->cell_dofs(c);
 
