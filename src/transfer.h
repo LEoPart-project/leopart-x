@@ -140,7 +140,7 @@ void transfer_to_particles(
       Eigen::Map<Eigen::VectorXd> ptr = field.data(pidx);
       ptr.setZero();
       Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
-                                     Eigen::ColMajor>>
+                                     Eigen::RowMajor>>
           q(basis_values.row(idx++).data(), value_size, space_dimension);
 
       ptr = q * vals;
