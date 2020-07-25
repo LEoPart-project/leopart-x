@@ -26,6 +26,10 @@ def test_interpolate_project():
     # Transfer from Function "u" to field "v"
     pyleopart.transfer_to_particles(p, v, u._cpp_object, pbasis)
 
+    # Compare fields "w" and "x"(squared)
+    for pidx in range(len(x)):
+        assert np.isclose(p.field("v").data(pidx), p.field("x").data(pidx)**2).all()
+
     # Transfer from field "v" back to Function "u"
     pyleopart.transfer_to_function(u._cpp_object, p, v, pbasis)
 

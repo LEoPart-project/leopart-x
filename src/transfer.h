@@ -148,7 +148,6 @@ void transfer_to_particles(
   }
 }
 //----------------------------------------------------------------------------
-
 void eval_particle_cell_contributions(
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& q,
     Eigen::VectorXd& l, int* row_idx, const Particles& pax, const Field& field,
