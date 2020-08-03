@@ -90,7 +90,7 @@ void transfer_to_function(
     // Maybe expand q and expand l to make sure we have a proper least square
     // problem
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> u_tmp
-        = ((q * q.transpose()).inverse() * (q * l));
+        = (q * q.transpose()).ldlt().solve(q * l);
     Eigen::Map<Eigen::VectorXd> u_i(u_tmp.data(), space_dimension * block_size);
 
     auto dofs = dm->cell_dofs(c);
