@@ -11,7 +11,12 @@ def test_interpolate_project():
     x, c = pyleopart.mesh_fill(mesh, ncells*npart)
     p = pyleopart.Particles(x, c)
 
+    Qt = dolfinx.function.FunctionSpace(mesh, ("DG", 2))
+    print(f"Space dimension is {Qt.element.space_dimension()}")
     Q = dolfinx.function.VectorFunctionSpace(mesh, ("DG", 2))
+    print(dir(Q.element))
+    print(f"Space dimension is {Q.element.space_dimension()}")
+    print(f"Value size is {Q.element.value_rank}")
     pbasis = pyleopart.get_particle_contributions(p, Q._cpp_object)
 
     def sq_val(x):
