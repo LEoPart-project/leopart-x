@@ -25,13 +25,6 @@ public:
     return _cell_particles;
   }
 
-  /// List of particles in a cell with (local) index \p cidx
-  const std::vector<int>& cell_particles(const int cidx) const
-  {
-    // TODO: assert validity of cidx
-    return _cell_particles[cidx];
-  }
-
   /// Add a particle to a cell
   /// @return New particle index
   int add_particle(const Eigen::VectorXd& x, int cell);
