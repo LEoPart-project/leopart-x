@@ -82,17 +82,15 @@ void transfer_to_function(
   for (int c = 0; c < ncells; ++c)
   {
     std::vector<int> cell_particles = pax.cell_particles()[c];
-    std::pair<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>,
-              Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>>
-        ql = eval_particle_cell_contributions(cell_particles, field,
-                                              basis_values, row_offset,
-                                              space_dimension, block_size);
+    auto [q, l] = eval_particle_cell_contributions(cell_particles, field,
+                                                   basis_values, row_offset,
+                                                   space_dimension, block_size);
 
     // Solve projection where
-    // - ql.first --> q has shape [ndofs/block_size, np]
-    // - ql.second --> l has shape [np, block_size]
+    // - q has shape [ndofs/block_size, np]
+    // - l has shape [np, block_size]
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> u_tmp
-        = (ql.first * ql.first.transpose()).ldlt().solve(ql.first * ql.second);
+        = (q * q.transpose()).ldlt().solve(q * l);
     Eigen::Map<Eigen::VectorXd> u_i(u_tmp.data(), space_dimension * block_size);
 
     auto dofs = dm->cell_dofs(c);
