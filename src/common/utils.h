@@ -5,8 +5,10 @@
 
 #pragma once
 
-namespace leopart{
-namespace common{
+namespace leopart
+{
+namespace common
+{
 // Common utilities should end up here
 }
 } // namespace leopart
