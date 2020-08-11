@@ -46,12 +46,12 @@ transfer::get_particle_contributions(
   std::shared_ptr<const dolfinx::fem::FiniteElement> element
       = function_space.element();
   assert(element);
-  const int reference_value_size = element->reference_value_size();
-  const int value_size = element->value_size();
-  const int space_dimension = element->space_dimension();
+  const int block_size = element->block_size();
+  const int reference_value_size = element->reference_value_size() / block_size;
+  const int value_size = element->value_size() / block_size;
+  const int space_dimension = element->space_dimension() / block_size;
 
   // Prepare geometry data structures
-
   Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       coordinate_dofs(num_dofs_g, gdim);
 
@@ -104,6 +104,5 @@ transfer::get_particle_contributions(
               basis_data.row(p).data());
     p += np;
   }
-
   return basis_data;
 }
