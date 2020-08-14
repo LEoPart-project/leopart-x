@@ -17,13 +17,13 @@ class l2project
 {
 public:
   l2project(const Particles& pax,
-            std::shared_ptr<dolfinx::function::Function> f);
+            std::shared_ptr<dolfinx::function::Function<PetscScalar>> f);
 
   void solve();
 
 private:
   std::shared_ptr<const Particles> _P;
-  std::shared_ptr<dolfinx::function::Function> _f;
+  std::shared_ptr<dolfinx::function::Function<PetscScalar>> _f;
 
   // Probably not needed as an attribute
   // std::shared_ptr<const dolfinx::fem::FiniteElement> _element;
