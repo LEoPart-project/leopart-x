@@ -6,6 +6,7 @@
 #include "Field.h"
 #include "Particles.h"
 #include "generation.h"
+#include "project/l2project.h"
 #include "transfer.h"
 
 #include <dolfinx.h>
@@ -16,7 +17,18 @@
 
 namespace py = pybind11;
 
-using namespace leopart;
+using leopart::Field;
+using leopart::Particles;
+using leopart::project::L2Project;
+
+using leopart::generation::mesh_fill;
+using leopart::generation::random_reference_tetrahedron;
+using leopart::generation::random_reference_triangle;
+
+using leopart::transfer::get_particle_contributions;
+using leopart::transfer::transfer_to_function;
+using leopart::transfer::transfer_to_particles;
+
 PYBIND11_MODULE(pyleopart, m)
 {
   py::class_<Field>(m, "Field")
@@ -42,25 +54,32 @@ PYBIND11_MODULE(pyleopart, m)
            py::overload_cast<>(&Particles::Particles::cell_particles,
                                py::const_));
 
-  // Generation functions
-  m.def("random_tet", &generation::random_reference_tetrahedron);
-  m.def("random_tri", &generation::random_reference_triangle);
-  m.def("mesh_fill", &generation::mesh_fill);
+  // Projection classes
+  py::class_<L2Project>(m, "L2Project")
+      .def(py::init<Particles&,
+                    std::shared_ptr<dolfinx::function::Function<PetscScalar>>,
+                    std::string>())
+      .def("solve", &L2Project::L2Project::solve);
 
-  // Transfer functions
-  m.def("get_particle_contributions", &transfer::get_particle_contributions);
+  // Generation functions
+  m.def("random_tet", &random_reference_tetrahedron);
+  m.def("random_tri", &random_reference_triangle);
+  m.def("mesh_fill", &mesh_fill);
+
+  // Transfer functions (probably shouldn't be interfaced)
+  m.def("get_particle_contributions", &get_particle_contributions);
   m.def("transfer_to_particles",
         py::overload_cast<
             Particles&, Field&,
             std::shared_ptr<const dolfinx::function::Function<PetscScalar>>,
             const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                                Eigen::RowMajor>&>(
-            &transfer::transfer_to_particles<PetscScalar>));
+            &transfer_to_particles<PetscScalar>));
   m.def("transfer_to_function",
         py::overload_cast<
             std::shared_ptr<dolfinx::function::Function<PetscScalar>>,
             const Particles&, const Field&,
             const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                                Eigen::RowMajor>&>(
-            &transfer::transfer_to_function<PetscScalar>));
+            &transfer_to_function<PetscScalar>));
 }

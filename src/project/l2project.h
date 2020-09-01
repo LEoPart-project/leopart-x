@@ -6,30 +6,32 @@
 #pragma once
 
 #include "../Particles.h"
+
 #include <dolfinx.h>
+#include <memory>
 
 namespace leopart
 {
 namespace project
 {
 
-class l2project
+class L2Project
 {
 public:
-  l2project(const Particles& pax,
-            std::shared_ptr<dolfinx::function::Function<PetscScalar>> f);
+  L2Project(const Particles& pax,
+            std::shared_ptr<dolfinx::function::Function<PetscScalar>> f,
+            std::string w);
 
   void solve();
 
+  // TODO: box constraint
+  // void solve(double l, double u);
 private:
-  std::shared_ptr<const Particles> _P;
+  std::shared_ptr<const Particles> _particles = nullptr;
   std::shared_ptr<dolfinx::function::Function<PetscScalar>> _f;
+  std::shared_ptr<const Field> _field;
 
-  // Probably not needed as an attribute
-  // std::shared_ptr<const dolfinx::fem::FiniteElement> _element;
-
-  const std::size_t _value_size, _space_dimension;
-  // = f->function_space()->element();
+  std::size_t _value_size, _space_dimension;
 };
 } // namespace project
 } // namespace leopart
