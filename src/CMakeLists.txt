@@ -15,7 +15,7 @@ if (NOT TARGET dolfinx)
 endif()
 
 # Source directories
-set(LEOPART_DIRS advect common io project)
+set(LEOPART_DIRS advect common io project external)
 
 # Executable
 add_library(${PROJECT_NAME} SHARED Particles.cpp Field.cpp generation.cpp transfer.cpp)

@@ -24,8 +24,9 @@ public:
 
   void solve();
 
-  // TODO: box constraint
-  // void solve(double l, double u);
+  /// Box-constraint
+  void solve(double l, double u);
+
 private:
   std::shared_ptr<const Particles> _particles = nullptr;
   std::shared_ptr<dolfinx::function::Function<PetscScalar>> _f;

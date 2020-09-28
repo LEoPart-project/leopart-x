@@ -59,7 +59,11 @@ PYBIND11_MODULE(pyleopart, m)
       .def(py::init<Particles&,
                     std::shared_ptr<dolfinx::function::Function<PetscScalar>>,
                     std::string>())
-      .def("solve", &L2Project::L2Project::solve);
+      .def("solve", py::overload_cast<>(&L2Project::L2Project::solve),
+           "l2 projection")
+      .def("solve",
+           py::overload_cast<double, double>(&L2Project::L2Project::solve),
+           "Bounded l2 projection");
 
   // Generation functions
   m.def("random_tet", &random_reference_tetrahedron);

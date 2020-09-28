@@ -1,6 +1,8 @@
 #include "l2project.h"
+#include "../external/quadprogpp/QuadProg++.hh"
 #include "../transfer.h"
 
+#include <Eigen/Dense>
 #include <memory>
 
 using namespace leopart;
@@ -18,8 +20,6 @@ L2Project::L2Project(
 
 void L2Project::solve()
 {
-  // Set function _f to zero?
-
   // Evaluate basis functions at particle positions
   Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       basis_values = transfer::get_particle_contributions(
@@ -29,6 +29,111 @@ void L2Project::solve()
   transfer::transfer_to_function(_f, *_particles, *_field, basis_values);
 };
 
-// void L2Project::solve(double l, double u){
+// TODO: template so as to make generic for arbitrary value size of the function
+// space
+void L2Project::solve(double l, double u)
+{
+  // Currently only scalar function spaces accepted
+  if (_value_size > 1)
+    throw std::runtime_error(
+        "Bounded projection is implemented for scalar functions only");
 
-// }
+  // Get element
+  assert(_f->function_space()->element());
+  std::shared_ptr<const dolfinx::fem::FiniteElement> element
+      = _f->function_space()->element();
+  assert(element);
+  const int block_size = element->block_size();
+  const int value_size = _value_size / block_size;
+  const int space_dimension = _space_dimension / block_size;
+  // assert(basis_values.cols() == value_size * space_dimension);
+
+  // Initialize the matrices/vectors for the bound constraints (constant
+  // throughout projection)
+  Eigen::MatrixXd CE, CI;
+  Eigen::VectorXd ce0, ci0;
+
+  CE.resize(space_dimension, 0);
+  ce0.resize(0);
+
+  CI.resize(space_dimension, space_dimension * value_size * 2);
+  CI.setZero();
+  ci0.resize(space_dimension * value_size * 2);
+  ci0.setZero();
+  for (std::size_t i = 0; i < space_dimension; i++)
+  {
+    CI(i, i) = 1.;
+    CI(i, i + space_dimension) = -1;
+    ci0(i) = -l;
+    ci0(i + space_dimension) = u;
+  }
+
+  // Evaluate basis functions at particle positions
+  Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      basis_values = transfer::get_particle_contributions(
+          *_particles, *_f->function_space());
+
+  // Get number of cells local to process
+  std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+      = _f->function_space()->mesh();
+  const int tdim = mesh->topology().dim();
+  int ncells = mesh->topology().index_map(tdim)->size_local();
+
+  std::shared_ptr<const dolfinx::fem::DofMap> dm
+      = _f->function_space()->dofmap();
+
+  // Vector of expansion_coefficients to be set
+  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>& expansion_coefficients
+      = _f->x()->array();
+
+  int row_offset = 0;
+  for (int c = 0; c < ncells; ++c)
+  {
+    std::vector<int> cell_particles = _particles->cell_particles()[c];
+    auto [q, l] = transfer::eval_particle_cell_contributions(
+        cell_particles, *_field, basis_values, row_offset, space_dimension,
+        block_size);
+
+    // Solve bounded lstsq projection
+    Eigen::MatrixXd AtA = q * (q.transpose());
+    Eigen::VectorXd Atf = -q * l;
+
+    Eigen::VectorXd u_i;
+    quadprogpp::solve_quadprog(AtA, Atf, CE, ce0, CI, ci0, u_i);
+
+    auto dofs = dm->cell_dofs(c);
+
+    assert(dofs.size() == space_dimension);
+
+    for (int i = 0; i < dofs.size(); ++i)
+    {
+      expansion_coefficients[dofs[i]] = u_i[i];
+    }
+    row_offset += cell_particles.size();
+  }
+
+  // for (CellIterator cell(*(_P->mesh())); !cell.end(); ++cell)
+  // {
+  //   std::size_t i = cell->index();
+  //   // Get dofs local to cell
+  //   Eigen::Map<const Eigen::Array<dolfin::la_index, Eigen::Dynamic, 1>>
+  //   celldofs
+  //       = _dofmap->cell_dofs(i);
+
+  //   // Initialize the cell matrix and cell vector
+  //   Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> q;
+  //   Eigen::Matrix<double, Eigen::Dynamic, 1> f;
+
+  //   // Get particle contributions
+  //   _P->get_particle_contributions(q, f, *cell, _element, _space_dimension,
+  //                                  _value_size_loc, _idx_pproperty);
+
+  //   // Then solve bounded lstsq projection
+  //   Eigen::MatrixXd AtA = q * (q.transpose());
+  //   Eigen::VectorXd Atf = -q * f;
+  //   Eigen::VectorXd u_i;
+  //   quadprogpp::solve_quadprog(AtA, Atf, CE, ce0, CI, ci0, u_i);
+  //   u.vector()->set_local(u_i.data(), u_i.size(), celldofs.data());
+  // }
+  // u.vector()->apply("insert");
+}
