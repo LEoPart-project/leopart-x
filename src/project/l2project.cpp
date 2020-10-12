@@ -38,6 +38,12 @@ void L2Project::solve(double l, double u)
     throw std::runtime_error(
         "Bounded projection is implemented for scalar functions only");
 
+  if (l > u)
+  {
+    throw std::runtime_error("Lower boundary cannot exceed upper boundary in "
+                             "constrained projection");
+  }
+
   // Get element
   assert(_f->function_space()->element());
   std::shared_ptr<const dolfinx::fem::FiniteElement> element
@@ -46,7 +52,6 @@ void L2Project::solve(double l, double u)
   const int block_size = element->block_size();
   const int value_size = _value_size / block_size;
   const int space_dimension = _space_dimension / block_size;
-  // assert(basis_values.cols() == value_size * space_dimension);
 
   // Initialize the matrices/vectors for the bound constraints (constant
   // throughout projection)

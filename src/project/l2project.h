@@ -22,13 +22,15 @@ public:
             std::shared_ptr<dolfinx::function::Function<PetscScalar>> f,
             std::string w);
 
+  /// Solve l2 projection problem
   void solve();
 
-  /// Box-constraint
+  /// Solve l2 projection with box constraints with @param l the lower
+  /// bound and @param u the upper bound
   void solve(double l, double u);
 
 private:
-  std::shared_ptr<const Particles> _particles = nullptr;
+  std::shared_ptr<const Particles> _particles;
   std::shared_ptr<dolfinx::function::Function<PetscScalar>> _f;
   std::shared_ptr<const Field> _field;
 
