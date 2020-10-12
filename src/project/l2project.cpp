@@ -111,29 +111,4 @@ void L2Project::solve(double l, double u)
     }
     row_offset += cell_particles.size();
   }
-
-  // for (CellIterator cell(*(_P->mesh())); !cell.end(); ++cell)
-  // {
-  //   std::size_t i = cell->index();
-  //   // Get dofs local to cell
-  //   Eigen::Map<const Eigen::Array<dolfin::la_index, Eigen::Dynamic, 1>>
-  //   celldofs
-  //       = _dofmap->cell_dofs(i);
-
-  //   // Initialize the cell matrix and cell vector
-  //   Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> q;
-  //   Eigen::Matrix<double, Eigen::Dynamic, 1> f;
-
-  //   // Get particle contributions
-  //   _P->get_particle_contributions(q, f, *cell, _element, _space_dimension,
-  //                                  _value_size_loc, _idx_pproperty);
-
-  //   // Then solve bounded lstsq projection
-  //   Eigen::MatrixXd AtA = q * (q.transpose());
-  //   Eigen::VectorXd Atf = -q * f;
-  //   Eigen::VectorXd u_i;
-  //   quadprogpp::solve_quadprog(AtA, Atf, CE, ce0, CI, ci0, u_i);
-  //   u.vector()->set_local(u_i.data(), u_i.size(), celldofs.data());
-  // }
-  // u.vector()->apply("insert");
 }
