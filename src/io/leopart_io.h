@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "../Particles.h"
+#include "Particles.h"
 
 namespace leopart
 {

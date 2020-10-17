@@ -25,6 +25,9 @@ foreach(DIR ${LEOPART_DIRS})
   add_subdirectory(${DIR})
 endforeach()
 
+target_include_directories(${PROJECT_NAME} PUBLIC
+                           "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>")
+
 # Set C++17 standard
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 

@@ -5,18 +5,13 @@
 
 #pragma once
 
-#include "../Particles.h"
+#include "Particles.h"
 
 namespace leopart
 {
 namespace advect
 {
 // Advection related code should go into leopart::advect namespace
-class Advect
-{
 
-public:
-  Advect();
-};
 } // namespace advect
 } // namespace leopart
