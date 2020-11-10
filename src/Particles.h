@@ -51,6 +51,17 @@ public:
     throw std::out_of_range("Field not found");
   }
 
+  // Const verions for internal use
+  const Field& field(std::string w) const
+  {
+    for (const Field& f : _fields)
+    {
+      if (f.name == w)
+        return f;
+    }
+    throw std::out_of_range("Field not found");
+  }
+
 private:
   // Indices of particles in each cell.
   std::vector<std::vector<int>> _cell_particles;

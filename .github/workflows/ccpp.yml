@@ -3,11 +3,19 @@ name: C/C++ CI
 on: [push]
 
 jobs:
-  build:
-
+  format:
     runs-on: ubuntu-latest
     container: dolfinx/dolfinx:latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: install_clang
+      run: pip3 install clang-format==9.0.0 && export CI=1
+    - name: run_formatter_script
+      run: ./scripts/run-clang-format.sh
 
+  build:
+    runs-on: ubuntu-latest
+    container: dolfinx/dolfinx:latest
     steps:
     - uses: actions/checkout@v2
     - name: build

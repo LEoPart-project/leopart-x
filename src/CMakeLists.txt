@@ -14,14 +14,27 @@ if (NOT TARGET dolfinx)
   find_package(DOLFINX REQUIRED)
 endif()
 
+# Source directories
+set(LEOPART_DIRS advect common io project external)
+
 # Executable
 add_library(${PROJECT_NAME} SHARED Particles.cpp Field.cpp generation.cpp transfer.cpp)
+
+# Add source to leopart target, and get sets of header files
+foreach(DIR ${LEOPART_DIRS})
+  add_subdirectory(${DIR})
+endforeach()
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+                           "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>")
 
 # Set C++17 standard
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfinx)
+
+# Headers are not being installed
 
 # Do not throw error for 'multi-line comments' (these are typical in
 # rst which includes LaTeX)

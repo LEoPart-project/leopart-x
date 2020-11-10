@@ -1,0 +1,3 @@
+set(HEADERS_io
+  ${CMAKE_CURRENT_SOURCE_DIR}/leopart_io.h
+  PARENT_SCOPE)
