@@ -19,7 +19,7 @@ class L2Project
 {
 public:
   L2Project(const Particles& pax,
-            std::shared_ptr<dolfinx::function::Function<PetscScalar>> f,
+            std::shared_ptr<dolfinx::fem::Function<PetscScalar>> f,
             std::string w);
 
   /// Solve l2 projection problem
@@ -31,7 +31,7 @@ public:
 
 private:
   std::shared_ptr<const Particles> _particles;
-  std::shared_ptr<dolfinx::function::Function<PetscScalar>> _f;
+  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> _f;
   std::shared_ptr<const Field> _field;
 
   std::size_t _value_size, _space_dimension;

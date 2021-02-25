@@ -15,15 +15,14 @@ namespace leopart::transfer
 {
 /// Return basis values for each particle in function space
 Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-get_particle_contributions(
-    const Particles& pax,
-    const dolfinx::function::FunctionSpace& function_space);
+get_particle_contributions(const Particles& pax,
+                           const dolfinx::fem::FunctionSpace& function_space);
 
 /// Use basis values to transfer function from field given by value_index to
 /// dolfinx Function
 template <typename T>
 void transfer_to_function(
-    std::shared_ptr<dolfinx::function::Function<T>> f, const Particles& pax,
+    std::shared_ptr<dolfinx::fem::Function<T>> f, const Particles& pax,
     const Field& field,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
@@ -33,7 +32,7 @@ void transfer_to_function(
 template <typename T>
 void transfer_to_particles(
     Particles& pax, Field& field,
-    std::shared_ptr<const dolfinx::function::Function<T>> f,
+    std::shared_ptr<const dolfinx::fem::Function<T>> f,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values);
 

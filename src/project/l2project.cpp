@@ -8,9 +8,9 @@
 using namespace leopart;
 using namespace leopart::project;
 
-L2Project::L2Project(
-    const Particles& pax,
-    std::shared_ptr<dolfinx::function::Function<PetscScalar>> f, std::string w)
+L2Project::L2Project(const Particles& pax,
+                     std::shared_ptr<dolfinx::fem::Function<PetscScalar>> f,
+                     std::string w)
     : _particles(std::make_shared<const Particles>(pax)), _f(f),
       _value_size(f->function_space()->element()->value_size()),
       _space_dimension(f->function_space()->element()->space_dimension()),
@@ -88,8 +88,9 @@ void L2Project::solve(double l, double u)
       = _f->function_space()->dofmap();
 
   // Vector of expansion_coefficients to be set
-  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>& expansion_coefficients
-      = _f->x()->array();
+  // Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>& expansion_coefficients
+  //     = _f->x()->array();
+  std::vector<PetscScalar>& expansion_coefficients = _f->x()->mutable_array();
 
   int row_offset = 0;
   for (int c = 0; c < ncells; ++c)

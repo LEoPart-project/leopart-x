@@ -6,13 +6,14 @@
 #include "transfer.h"
 #include "Particles.h"
 #include <dolfinx.h>
+// Stick to eigen for the time being
+#include <unsupported/Eigen/CXX11/Tensor>
 
 using namespace leopart;
 
 Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
 transfer::get_particle_contributions(
-    const Particles& pax,
-    const dolfinx::function::FunctionSpace& function_space)
+    const Particles& pax, const dolfinx::fem::FunctionSpace& function_space)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = function_space.mesh();
   const int gdim = mesh->geometry().dim();
@@ -33,12 +34,11 @@ transfer::get_particle_contributions(
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = mesh->geometry().dofmap();
   const int num_dofs_g = x_dofmap.num_links(0);
-  const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>& x_g
-      = mesh->geometry().x();
+  const dolfinx::common::array2d<double>& x_g = mesh->geometry().x();
 
   // Get cell permutation data
   mesh->topology_mutable().create_entity_permutations();
-  const Eigen::Array<std::uint32_t, Eigen::Dynamic, 1>& cell_info
+  const std::vector<std::uint32_t>& cell_info
       = mesh->topology().get_cell_permutation_info();
 
   // Get element
@@ -52,8 +52,9 @@ transfer::get_particle_contributions(
   const int space_dimension = element->space_dimension() / block_size;
 
   // Prepare geometry data structures
-  Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-      coordinate_dofs(num_dofs_g, gdim);
+  // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+  //     coordinate_dofs(num_dofs_g, gdim);
+  dolfinx::common::array2d<double> coordinate_dofs(num_dofs_g, gdim);
 
   // Each row represents the contribution from the particle in its cell
   Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
@@ -71,31 +72,62 @@ transfer::get_particle_contributions(
     // Get cell geometry (coordinate dofs)
     auto x_dofs = x_dofmap.links(c);
     for (int i = 0; i < num_dofs_g; ++i)
-      coordinate_dofs.row(i) = x_g.row(x_dofs[i]).head(gdim);
+      // TODO: make more efficient?
+      for (int j = 0; j < gdim; ++j)
+      {
+        coordinate_dofs(i, j) = x_g(x_dofs[i], j);
+      }
+    // coordinate_dofs.row(i) = x_g.row(x_dofs[i]); // .head(gdim);
 
     // Physical and reference coordinates
-    Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> x(
-        np, tdim);
-    Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> X(
-        np, tdim);
+    // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> x(
+    //     np, tdim);
+    // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> X(
+    //     np, tdim);
     // Prepare basis function data structures
-    Eigen::Tensor<double, 3, Eigen::RowMajor> basis_reference_values(
-        np, space_dimension, reference_value_size);
-    Eigen::Tensor<double, 3, Eigen::RowMajor> basis_values(np, space_dimension,
-                                                           value_size);
-    Eigen::Tensor<double, 3, Eigen::RowMajor> J(np, gdim, tdim);
-    Eigen::Array<double, Eigen::Dynamic, 1> detJ(np);
-    Eigen::Tensor<double, 3, Eigen::RowMajor> K(np, tdim, gdim);
+    // Eigen::Tensor<double, 3, Eigen::RowMajor> basis_reference_values(
+    //     np, space_dimension, reference_value_size);
+    // Eigen::Tensor<double, 3, Eigen::RowMajor> basis_values(np,
+    // space_dimension,
+    //                                                        value_size);
+    // Eigen::Tensor<double, 3, Eigen::RowMajor> J(np, gdim, tdim);
+    // Eigen::Array<double, Eigen::Dynamic, 1> detJ(np);
+    // Eigen::Tensor<double, 3, Eigen::RowMajor> K(np, tdim, gdim);
 
+    // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> x(
+    //     np, tdim);
+    // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> X(
+    //     np, tdim);
+    dolfinx::common::array2d<double> X(np, tdim);
+    dolfinx::common::array2d<double> x(np, tdim);
+
+    std::vector<double> basis_reference_values(np * space_dimension
+                                               * reference_value_size);
+    std::vector<double> basis_values(np * space_dimension
+                                     * reference_value_size);
+    std::vector<double> J(np * gdim * tdim);
+    std::vector<double> detJ(np);
+    std::vector<double> K(np * tdim * gdim);
+
+    // double* ptr = &X(0, 0);
+    // Eigen::Map<Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+    // Eigen::RowMajor>> X_eigen(ptr); Fill particle coordinates
     for (int i = 0; i < np; ++i)
-      x.row(i) = pax.field(0).data(cell_particles[c][i]).head(gdim);
+      // TODO: avoid this ugly copy
+      for (int j = 0; j < tdim; ++j)
+        x(i, j) = pax.field(0).data(cell_particles[c][i])[j];
+    // x.row(i) = pax.field(0).data(cell_particles[c][i]).head(gdim);
 
     cmap.compute_reference_geometry(X, J, detJ, K, x, coordinate_dofs);
+    // cmap.compute_reference_geometry(X_eigen, J, detJ, K, x, coordinate_dofs);
     // Compute basis on reference element
     element->evaluate_reference_basis(basis_reference_values, X);
     // Push basis forward to physical element
+    // element->transform_reference_basis(basis_values, basis_reference_values,
+    // X,
+    //                                    J, detJ, K, cell_info[c]);
     element->transform_reference_basis(basis_values, basis_reference_values, X,
-                                       J, detJ, K, cell_info[c]);
+                                       J, detJ, K);
 
     // FIXME: avoid copy by using Eigen::TensorMap
     // Copy basis data
@@ -109,7 +141,7 @@ transfer::get_particle_contributions(
 //----------------------------------------------------------------------------
 template <typename T>
 void transfer::transfer_to_function(
-    std::shared_ptr<dolfinx::function::Function<T>> f, const Particles& pax,
+    std::shared_ptr<dolfinx::fem::Function<T>> f, const Particles& pax,
     const Field& field,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
@@ -133,7 +165,8 @@ void transfer::transfer_to_function(
       = f->function_space()->dofmap();
 
   // Vector of expansion_coefficients to be set
-  Eigen::Matrix<T, Eigen::Dynamic, 1>& expansion_coefficients = f->x()->array();
+  // Eigen::Matrix<T, Eigen::Dynamic, 1>&
+  std::vector<T>& expansion_coefficients = f->x()->mutable_array();
 
   int row_offset = 0;
   for (int c = 0; c < ncells; ++c)
@@ -165,7 +198,7 @@ void transfer::transfer_to_function(
 template <typename T>
 void transfer::transfer_to_particles(
     Particles& pax, Field& field,
-    std::shared_ptr<const dolfinx::function::Function<T>> f,
+    std::shared_ptr<const dolfinx::fem::Function<T>> f,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
         basis_values)
 {
@@ -192,7 +225,8 @@ void transfer::transfer_to_particles(
       = f->function_space()->dofmap();
 
   // Const array of expansion coefficients
-  const Eigen::Matrix<T, Eigen::Dynamic, 1>& f_array = f->x()->array();
+  // const Eigen::Matrix<T, Eigen::Dynamic, 1>& f_array = f->x()->array();
+  const std::vector<T>& f_array = f->x()->array();
 
   int idx = 0;
   for (int c = 0; c < ncells; ++c)
@@ -246,12 +280,12 @@ transfer::eval_particle_cell_contributions(
 // https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file
 template void transfer::transfer_to_particles<>(
     Particles&, Field&,
-    std::shared_ptr<const dolfinx::function::Function<PetscScalar>>,
+    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                        Eigen::RowMajor>&);
 
 template void transfer::transfer_to_function<>(
-    std::shared_ptr<dolfinx::function::Function<PetscScalar>>, const Particles&,
+    std::shared_ptr<dolfinx::fem::Function<PetscScalar>>, const Particles&,
     const Field&,
     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                        Eigen::RowMajor>&);
