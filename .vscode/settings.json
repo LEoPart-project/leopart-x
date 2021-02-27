@@ -74,7 +74,8 @@
         "geometry": "cpp",
         "*.def": "cpp",
         "*.gen": "cpp",
-        "*.inc": "cpp"
+        "*.inc": "cpp",
+        "tensor": "cpp"
     },
     "C_Cpp.dimInactiveRegions": false,
     "cmake.cmakePath": "cmake",

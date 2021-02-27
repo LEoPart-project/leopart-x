@@ -12,7 +12,7 @@ T volume_interval(const dolfinx::mesh::Mesh& mesh,
   const mesh::Geometry& geometry = mesh.geometry();
   const graph::AdjacencyList<std::int32_t>& x_dofs = geometry.dofmap();
 
-  const dolfinx::common::array2d<double>& x_coords = geometry.x();
+  const dolfinx::array2d<double>& x_coords = geometry.x();
 
   T v(entities.rows());
   for (Eigen::Index i = 0; i < entities.rows(); ++i)
@@ -42,7 +42,7 @@ T volume_triangle(const dolfinx::mesh::Mesh& mesh,
   assert(gdim == 2 or gdim == 3);
   const graph::AdjacencyList<std::int32_t>& x_dofs = geometry.dofmap();
 
-  const dolfinx::common::array2d<double>& x_coords = geometry.x();
+  const dolfinx::array2d<double>& x_coords = geometry.x();
 
   T v(entities.rows());
   if (gdim == 2)
@@ -105,7 +105,7 @@ T volume_tetrahedron(const dolfinx::mesh::Mesh& mesh,
   const mesh::Geometry& geometry = mesh.geometry();
   const graph::AdjacencyList<std::int32_t>& x_dofs = geometry.dofmap();
 
-  const dolfinx::common::array2d<double>& x_coords = geometry.x();
+  const dolfinx::array2d<double>& x_coords = geometry.x();
 
   Eigen::ArrayXd v(entities.rows());
   for (Eigen::Index i = 0; i < entities.rows(); ++i)

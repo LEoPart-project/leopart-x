@@ -32,10 +32,10 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = mesh.geometry().dofmap();
   const int num_dofs_g = x_dofmap.num_links(0);
-  const dolfinx::common::array2d<double>& x_g = mesh.geometry().x();
+  const dolfinx::array2d<double>& x_g = mesh.geometry().x();
   // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
   //     cell_geometry(num_dofs_g, gdim);
-  dolfinx::common::array2d<double> cell_geometry(num_dofs_g, gdim);
+  dolfinx::array2d<double> cell_geometry(num_dofs_g, gdim);
 
   std::vector<int> cells;
   std::vector<double> xc;
@@ -55,8 +55,8 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
     // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> x(
     //     X.rows(), gdim);
 
-    dolfinx::common::array2d<double> X = random_reference(celltype, np);
-    dolfinx::common::array2d<double> x(X.shape[0], gdim);
+    dolfinx::array2d<double> X = random_reference(celltype, np);
+    dolfinx::array2d<double> x(X.shape[0], gdim);
 
     // Convert to physical x values
     auto x_dofs = x_dofmap.links(i);
@@ -97,7 +97,7 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
 //   return Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
 //                       Eigen::RowMajor>();
 // }
-dolfinx::common::array2d<double>
+dolfinx::array2d<double>
 generation::random_reference(dolfinx::mesh::CellType celltype, int n)
 {
   if (celltype == dolfinx::mesh::CellType::triangle)
@@ -107,14 +107,14 @@ generation::random_reference(dolfinx::mesh::CellType celltype, int n)
 
   throw std::runtime_error("Unsupported cell type");
 
-  return dolfinx::common::array2d<double>(0, 0);
+  return dolfinx::array2d<double>(0, 0);
 }
 //------------------------------------------------------------------------
 // Eigen::Array<double, Eigen::Dynamic, 2, Eigen::RowMajor>
-dolfinx::common::array2d<double> generation::random_reference_triangle(int n)
+dolfinx::array2d<double> generation::random_reference_triangle(int n)
 {
   // Eigen::Array<double, Eigen::Dynamic, 2, Eigen::RowMajor> p(n, 2);
-  dolfinx::common::array2d<double> p(n, 2);
+  dolfinx::array2d<double> p(n, 2);
 
   for (int i = 0; i < n; ++i)
   {
@@ -140,12 +140,12 @@ dolfinx::common::array2d<double> generation::random_reference_triangle(int n)
 }
 //------------------------------------------------------------------------
 // Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>
-dolfinx::common::array2d<double> generation::random_reference_tetrahedron(int n)
+dolfinx::array2d<double> generation::random_reference_tetrahedron(int n)
 {
   // Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> p(n, 3);
   // p.fill(1.0);
 
-  dolfinx::common::array2d<double> p(n, 3, 1.0);
+  dolfinx::array2d<double> p(n, 3, 1.0);
 
   for (int i = 0; i < n; ++i)
   {

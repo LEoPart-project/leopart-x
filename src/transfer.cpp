@@ -34,7 +34,7 @@ transfer::get_particle_contributions(
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = mesh->geometry().dofmap();
   const int num_dofs_g = x_dofmap.num_links(0);
-  const dolfinx::common::array2d<double>& x_g = mesh->geometry().x();
+  const dolfinx::array2d<double>& x_g = mesh->geometry().x();
 
   // Get cell permutation data
   mesh->topology_mutable().create_entity_permutations();
@@ -54,11 +54,14 @@ transfer::get_particle_contributions(
   // Prepare geometry data structures
   // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
   //     coordinate_dofs(num_dofs_g, gdim);
-  dolfinx::common::array2d<double> coordinate_dofs(num_dofs_g, gdim);
+  dolfinx::array2d<double> coordinate_dofs(num_dofs_g, gdim);
 
   // Each row represents the contribution from the particle in its cell
   Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       basis_data(nparticles, space_dimension * value_size);
+
+  // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+  //     basis_data(space_dimension * value_size, nparticles);
 
   int p = 0;
   for (int c = 0; c < ncells; ++c)
@@ -98,8 +101,8 @@ transfer::get_particle_contributions(
     //     np, tdim);
     // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> X(
     //     np, tdim);
-    dolfinx::common::array2d<double> X(np, tdim);
-    dolfinx::common::array2d<double> x(np, tdim);
+    dolfinx::array2d<double> X(np, tdim);
+    dolfinx::array2d<double> x(np, tdim);
 
     std::vector<double> basis_reference_values(np * space_dimension
                                                * reference_value_size);
@@ -131,11 +134,26 @@ transfer::get_particle_contributions(
 
     // FIXME: avoid copy by using Eigen::TensorMap
     // Copy basis data
-    std::copy(basis_values.data(),
-              basis_values.data() + np * space_dimension * value_size,
-              basis_data.row(p).data());
+    for (const auto& val : basis_values)
+    {
+      std::cout << "Value " << val << std::endl;
+    }
+    std::cout << "=======" << std::endl;
+    // std::copy(basis_values.data(),
+    //           basis_values.data() + np * space_dimension * value_size,
+    //           basis_data.col(p).data());
+
+    for (size_t j = 0; j < space_dimension * value_size; ++j)
+    {
+      for (size_t i = 0; i < np; ++i)
+      {
+        basis_data(i + p, j) = basis_values[i + np * j];
+      }
+    }
     p += np;
+    std::cout << "Pvalue " << p << std::endl;
   }
+  std::cout << basis_data << std::endl;
   return basis_data;
 }
 //----------------------------------------------------------------------------
@@ -182,15 +200,25 @@ void transfer::transfer_to_function(
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> u_tmp
         = (q * q.transpose()).ldlt().solve(q * l);
     Eigen::Map<Eigen::VectorXd> u_i(u_tmp.data(), space_dimension * block_size);
-
+    std::cout << "U_i.size() " << u_i.size() << std::endl;
     auto dofs = dm->cell_dofs(c);
 
     assert(dofs.size() == space_dimension);
 
-    for (int i = 0; i < dofs.size(); ++i)
+    // for (int i = 0; i < dofs.size(); ++i)
+    // {
+    //   expansion_coefficients[dofs[i]] = u_i[i];
+    // }
+
+    for (int k = 0; k < dofs.size(); ++k)
     {
-      expansion_coefficients[dofs[i]] = u_i[i];
+      for (int l = 0; l < block_size; ++l)
+      {
+        expansion_coefficients[dofs[k] * block_size + l]
+            = u_i[k * block_size + l];
+      }
     }
+
     row_offset += cell_particles.size();
   }
 }
@@ -227,16 +255,37 @@ void transfer::transfer_to_particles(
   // Const array of expansion coefficients
   // const Eigen::Matrix<T, Eigen::Dynamic, 1>& f_array = f->x()->array();
   const std::vector<T>& f_array = f->x()->array();
+  std::cout << "F size " << f_array.size() << std::endl;
 
   int idx = 0;
   for (int c = 0; c < ncells; ++c)
   {
     auto dofs = dm->cell_dofs(c);
-    Eigen::VectorXd vals(dofs.size());
+    // std::cout << "dofs size "<<dofs.size()<<std::endl;
+    // Eigen::VectorXd vals(dofs.size());
+    // for (int k = 0; k < dofs.size(); ++k)
+    // {
+    //   vals[k] = f_array[dofs[k]];
+    // }
+
+    // UPDATED
+    Eigen::VectorXd vals(dofs.size() * block_size);
     for (int k = 0; k < dofs.size(); ++k)
     {
-      vals[k] = f_array[dofs[k]];
+      for (int l = 0; l < block_size; ++l)
+      {
+        std::cout << "Dof number " << dofs[k] * block_size + l << "\nValue "
+                  << f_array[dofs[k] * block_size + l] << std::endl;
+        vals[k * block_size + l] = f_array[dofs[k] * block_size + l];
+      }
     }
+
+    // Python, remove
+    // cell_blocks = Q.dofmap.cell_dofs(i)
+    // for (j,dof) in enumerate(cell_blocks):
+    //     for k in range(block_size):
+    //         local_cell_dofs[i, j*block_size+k] = dof*block_size + k
+
     // Cast as matrix of size [block_size, space_dimension/block_size]
     Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
                                    Eigen::ColMajor>>
@@ -249,7 +298,13 @@ void transfer::transfer_to_particles(
       Eigen::Map<const Eigen::VectorXd> q(basis_values.row(idx++).data(),
                                           space_dimension);
 
+      std::cout << "Vals mat " << vals_mat << std::endl;
+      std::cout << "[JM] q here " << q << std::endl;
+
       ptr = vals_mat * q;
+      std::cout << "[JM] printing value at particle " << pidx
+                << "position: " << pax.field(0).data(pidx) << " value: " << ptr
+                << std::endl;
     }
   }
 }
