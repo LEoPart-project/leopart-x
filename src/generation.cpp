@@ -6,10 +6,8 @@
 #include "generation.h"
 #include "common/dolfinxutils.h"
 #include <Eigen/Dense>
-// #include <dolfinx.h>
 #include <iostream>
 
-// using namespace leopart;
 namespace leopart
 {
 //------------------------------------------------------------------------
@@ -33,8 +31,6 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
       = mesh.geometry().dofmap();
   const int num_dofs_g = x_dofmap.num_links(0);
   const dolfinx::array2d<double>& x_g = mesh.geometry().x();
-  // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-  //     cell_geometry(num_dofs_g, gdim);
   dolfinx::array2d<double> cell_geometry(num_dofs_g, gdim);
 
   std::vector<int> cells;
@@ -49,12 +45,7 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
     if (np > 50)
       std::cout << "Warning: np > 50 in cell " << i << "\n";
 
-    // get random X values
-    // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> X
-    //     = random_reference(celltype, np);
-    // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> x(
-    //     X.rows(), gdim);
-
+    // Get random X values
     dolfinx::array2d<double> X = random_reference(celltype, np);
     dolfinx::array2d<double> x(X.shape[0], gdim);
 
@@ -66,11 +57,9 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
       {
         cell_geometry(j, k) = x_g(x_dofs[j], k);
       }
-    // cell_geometry.row(j) = x_g.row(x_dofs[j]).head(gdim);
 
     mesh.geometry().cmap().push_forward(x, X, cell_geometry);
-    // append to list
-    // xc.insert(xc.end(), x.data(), x.data() + x.rows() * x.cols());
+    // Append to list
     xc.insert(xc.end(), x.data(), x.data() + x.size());
     std::vector<int> npcells(np, i);
     cells.insert(cells.end(), npcells.begin(), npcells.end());
@@ -84,19 +73,6 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
   return {xc_eigen, cells};
 }
 //------------------------------------------------------------------------
-// Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-// generation::random_reference(dolfinx::mesh::CellType celltype, int n)
-// {
-//   if (celltype == dolfinx::mesh::CellType::triangle)
-//     return random_reference_triangle(n);
-//   if (celltype == dolfinx::mesh::CellType::tetrahedron)
-//     return random_reference_tetrahedron(n);
-
-//   throw std::runtime_error("Unsupported cell type");
-
-//   return Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
-//                       Eigen::RowMajor>();
-// }
 dolfinx::array2d<double>
 generation::random_reference(dolfinx::mesh::CellType celltype, int n)
 {
@@ -110,10 +86,8 @@ generation::random_reference(dolfinx::mesh::CellType celltype, int n)
   return dolfinx::array2d<double>(0, 0);
 }
 //------------------------------------------------------------------------
-// Eigen::Array<double, Eigen::Dynamic, 2, Eigen::RowMajor>
 dolfinx::array2d<double> generation::random_reference_triangle(int n)
 {
-  // Eigen::Array<double, Eigen::Dynamic, 2, Eigen::RowMajor> p(n, 2);
   dolfinx::array2d<double> p(n, 2);
 
   for (int i = 0; i < n; ++i)
@@ -129,17 +103,15 @@ dolfinx::array2d<double> generation::random_reference_triangle(int n)
       x[0] = (1 + x[0]);
       x[1] = (1 + x[1]);
     }
-    // p.row(i) = x;
     // TODO: make more efficient
+    // as in // p.row(i) = x;
     p(i, 0) = 0.5 * x[0];
     p(i, 1) = 0.5 * x[1];
   }
-
   // p /= 2.0;
   return p;
 }
 //------------------------------------------------------------------------
-// Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>
 dolfinx::array2d<double> generation::random_reference_tetrahedron(int n)
 {
   // Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> p(n, 3);

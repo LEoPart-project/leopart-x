@@ -70,11 +70,6 @@ PYBIND11_MODULE(pyleopart, m)
 
   // Advection class(es)
   py::class_<Advect, std::shared_ptr<Advect>>(m, "Advect")
-      //    .def(py::init<int>())
-      // //    .def(py::init<
-      // //         std::shared_ptr<const Particles>>())
-      //    .def(py::init<
-      //         const std::shared_ptr<dolfinx::mesh::Mesh>&>())
       .def(py::init<std::shared_ptr<Particles>&,
                     const std::shared_ptr<dolfinx::mesh::Mesh>&>());
 

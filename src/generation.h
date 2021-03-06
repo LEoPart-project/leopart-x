@@ -8,18 +8,6 @@
 
 #pragma once
 
-// namespace dolfinx
-// {
-// namespace mesh
-// {
-// class Mesh;
-// enum class CellType;
-// } // namespace mesh
-// namespace common{
-//     class array2d;
-// }
-// } // namespace dolfinx
-
 namespace leopart
 {
 namespace generation
@@ -35,20 +23,17 @@ mesh_fill(const dolfinx::mesh::Mesh& mesh, double density);
 
 /// Create a set of n points at random positions within the cell.
 /// @return
-// Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
 dolfinx::array2d<double> random_reference(dolfinx::mesh::CellType celltype,
                                           int n);
 
 /// Create a set of n points at random positions within the reference
 /// tetrahedron
 /// @return Array of R^3-coordinates
-// Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>
 dolfinx::array2d<double> random_reference_tetrahedron(int n);
 
 /// Create a set of n points at random positions within the reference
 /// triangle
 /// @return Array of R^2-coordinates
-// Eigen::Array<double, Eigen::Dynamic, 2, Eigen::RowMajor>
 dolfinx::array2d<double> random_reference_triangle(int n);
 } // namespace generation
 }; // namespace leopart
