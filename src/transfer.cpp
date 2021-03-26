@@ -7,6 +7,7 @@
 #include "Particles.h"
 #include <dolfinx.h>
 // Stick to eigen for the time being
+#include <algorithm>
 #include <unsupported/Eigen/CXX11/Tensor>
 
 using namespace leopart;
@@ -70,11 +71,9 @@ transfer::get_particle_contributions(
     // Get cell geometry (coordinate dofs)
     auto x_dofs = x_dofmap.links(c);
     for (int i = 0; i < num_dofs_g; ++i)
-      // TODO: make more efficient?
-      for (int j = 0; j < gdim; ++j)
-      {
-        coordinate_dofs(i, j) = x_g(x_dofs[i], j);
-      }
+      // TODO: can we avoid a copy?
+      std::copy_n(x_g.row(x_dofs[i]).data(), gdim,
+                  coordinate_dofs.row(i).data());
 
     // Physical and reference coordinates
     dolfinx::array2d<double> x(np, tdim);
@@ -90,13 +89,16 @@ transfer::get_particle_contributions(
     std::vector<double> K(np * tdim * gdim);
 
     for (int i = 0; i < np; ++i)
-      // TODO: avoid this ugly copy
-      for (int j = 0; j < tdim; ++j)
-        x(i, j) = pax.field(0).data(cell_particles[c][i])[j];
+    {
+      // TODO: can we avoid a copy here?
+      std::copy_n(pax.field(0).data(cell_particles[c][i]).data(), gdim,
+                  x.row(i).data());
+    }
 
     cmap.compute_reference_geometry(X, J, detJ, K, x, coordinate_dofs);
     // Compute basis on reference element
     element->evaluate_reference_basis(basis_reference_values, X);
+
     // Push basis forward to physical element
     element->transform_reference_basis(basis_values, basis_reference_values, X,
                                        J, detJ, K);
@@ -111,9 +113,7 @@ transfer::get_particle_contributions(
       }
     }
     p += np;
-    std::cout << "Pvalue " << p << std::endl;
   }
-  std::cout << basis_data << std::endl;
   return basis_data;
 }
 //----------------------------------------------------------------------------
@@ -159,7 +159,6 @@ void transfer::transfer_to_function(
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> u_tmp
         = (q * q.transpose()).ldlt().solve(q * l);
     Eigen::Map<Eigen::VectorXd> u_i(u_tmp.data(), space_dimension * block_size);
-    std::cout << "U_i.size() " << u_i.size() << std::endl;
     auto dofs = dm->cell_dofs(c);
 
     assert(dofs.size() == space_dimension);

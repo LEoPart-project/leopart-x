@@ -14,6 +14,11 @@ if (NOT TARGET dolfinx)
   find_package(DOLFINX REQUIRED)
 endif()
 
+find_package(Basix REQUIRED)
+
+# Use eigen for the time being (with an ugly hard coded path)
+include_directories("~/opt/eigen/eigen")
+
 # Source directories
 set(LEOPART_DIRS advect common io project external)
 
