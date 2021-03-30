@@ -18,12 +18,6 @@ jobs:
     container: dolfinx/dolfinx:latest
     steps:
     - uses: actions/checkout@v2
-    - name: Get eigen
-      run: |
-        export HOMEDIR=$PWD
-        mkdir -p ~/opt/eigen && cd ~/opt/eigen 
-        git clone https://gitlab.com/libeigen/eigen.git
-        cd $HOMEDIR
     - name: build
       run: cd src && python3 setup.py install
     - name: test

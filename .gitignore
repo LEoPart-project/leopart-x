@@ -4,6 +4,9 @@ html/
 latex/
 build/
 dist/
+CMakeFiles/
+MakeFile
+CMakeCache.txt
 *.egg-info/
 __pycache__/
 src/core

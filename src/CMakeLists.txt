@@ -16,8 +16,12 @@ endif()
 
 find_package(Basix REQUIRED)
 
-# Use eigen for the time being (with an ugly hard coded path)
-include_directories("~/opt/eigen/eigen")
+# Set location for Find cmake files
+set(CMAKE_MODULE_PATH "${leopart_SOURCE_DIR}/cmake")
+
+# Find and include Eigen3
+find_package(Eigen3 3.2.90 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
 
 # Source directories
 set(LEOPART_DIRS advect common io project external)
@@ -30,6 +34,7 @@ foreach(DIR ${LEOPART_DIRS})
   add_subdirectory(${DIR})
 endforeach()
 
+add_definitions(-DTRACE_SOLVER)
 target_include_directories(${PROJECT_NAME} PUBLIC
                            "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>")
 

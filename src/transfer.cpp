@@ -5,10 +5,8 @@
 
 #include "transfer.h"
 #include "Particles.h"
-#include <dolfinx.h>
-// Stick to eigen for the time being
 #include <algorithm>
-#include <unsupported/Eigen/CXX11/Tensor>
+#include <dolfinx.h>
 
 using namespace leopart;
 

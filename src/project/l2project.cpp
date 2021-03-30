@@ -88,8 +88,6 @@ void L2Project::solve(double l, double u)
       = _f->function_space()->dofmap();
 
   // Vector of expansion_coefficients to be set
-  // Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>& expansion_coefficients
-  //     = _f->x()->array();
   std::vector<PetscScalar>& expansion_coefficients = _f->x()->mutable_array();
 
   int row_offset = 0;
@@ -106,7 +104,6 @@ void L2Project::solve(double l, double u)
 
     Eigen::VectorXd u_i;
     quadprogpp::solve_quadprog(AtA, Atf, CE, ce0, CI, ci0, u_i);
-
     auto dofs = dm->cell_dofs(c);
 
     assert(dofs.size() == space_dimension);
