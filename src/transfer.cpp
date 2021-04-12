@@ -69,7 +69,6 @@ transfer::get_particle_contributions(
     // Get cell geometry (coordinate dofs)
     auto x_dofs = x_dofmap.links(c);
     for (int i = 0; i < num_dofs_g; ++i)
-      // TODO: can we avoid a copy?
       std::copy_n(x_g.row(x_dofs[i]).data(), gdim,
                   coordinate_dofs.row(i).data());
 
@@ -104,12 +103,8 @@ transfer::get_particle_contributions(
     // FIXME: avoid copy by using Eigen::TensorMap
     // Copy basis data
     for (size_t j = 0; j < space_dimension * value_size; ++j)
-    {
       for (size_t i = 0; i < np; ++i)
-      {
         basis_data(i + p, j) = basis_values[i + np * j];
-      }
-    }
     p += np;
   }
   return basis_data;
@@ -162,13 +157,9 @@ void transfer::transfer_to_function(
     assert(dofs.size() == space_dimension);
 
     for (int k = 0; k < dofs.size(); ++k)
-    {
       for (int l = 0; l < block_size; ++l)
-      {
         expansion_coefficients[dofs[k] * block_size + l]
             = u_i[k * block_size + l];
-      }
-    }
 
     row_offset += cell_particles.size();
   }
@@ -212,12 +203,8 @@ void transfer::transfer_to_particles(
     auto dofs = dm->cell_dofs(c);
     Eigen::VectorXd vals(dofs.size() * block_size);
     for (int k = 0; k < dofs.size(); ++k)
-    {
       for (int l = 0; l < block_size; ++l)
-      {
         vals[k * block_size + l] = f_array[dofs[k] * block_size + l];
-      }
-    }
 
     // Cast as matrix of size [block_size, space_dimension/block_size]
     Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
@@ -257,8 +244,7 @@ transfer::eval_particle_cell_contributions(
   return std::make_pair(q, l);
 }
 
-// Explicit instantiation of template functions needed, see
-// https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file
+// Explicit instantiation of template functions
 template void transfer::transfer_to_particles<>(
     Particles&, Field&,
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>,

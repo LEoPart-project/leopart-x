@@ -52,11 +52,8 @@ generation::mesh_fill(const dolfinx::mesh::Mesh& mesh, double density)
     // Convert to physical x values
     auto x_dofs = x_dofmap.links(i);
     for (int j = 0; j < num_dofs_g; ++j)
-      // TODO: make more efficient?
       for (int k = 0; k < gdim; ++k)
-      {
         cell_geometry(j, k) = x_g(x_dofs[j], k);
-      }
 
     mesh.geometry().cmap().push_forward(x, X, cell_geometry);
     // Append to list
@@ -103,12 +100,10 @@ dolfinx::array2d<double> generation::random_reference_triangle(int n)
       x[0] = (1 + x[0]);
       x[1] = (1 + x[1]);
     }
-    // TODO: make more efficient
-    // as in // p.row(i) = x;
+    // FIXME: avoid a copy?
     p(i, 0) = 0.5 * x[0];
     p(i, 1) = 0.5 * x[1];
   }
-  // p /= 2.0;
   return p;
 }
 //------------------------------------------------------------------------
@@ -144,14 +139,11 @@ dolfinx::array2d<double> generation::random_reference_tetrahedron(int n)
       y = -y - z - 1;
     }
 
-    // p.row(i) += r;
-    // TODO: make more efficient
+    // FIXME: avoid a copy?
     p(i, 0) += 0.5 * r[0];
     p(i, 1) += 0.5 * r[1];
     p(i, 2) += 0.5 * r[2];
   }
-  // p /= 2.0;
-
   return p;
 }
 } // namespace leopart
