@@ -3,15 +3,15 @@
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
-#include "Particles.h"
 #include <cassert>
 #include <dolfinx.h>
 
+#include "Particles.h"
+
 using namespace leopart;
 
-Particles::Particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
-                                        Eigen::RowMajor>& x,
-                     const std::vector<int>& cells)
+Particles::Particles(const std::span<double>& x,
+                     const std::vector<std::int32_t>& cells)
 {
   // Find max cell index, and create cell->particle map
   auto max_cell_it = std::max_element(cells.begin(), cells.end());
@@ -22,16 +22,22 @@ Particles::Particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
   for (std::size_t p = 0; p < cells.size(); ++p)
     _cell_particles[cells[p]].push_back(p);
 
-  Field fx("x", {{(int)x.cols()}}, x.rows());
-  for (int i = 0; i < x.rows(); ++i)
-    fx.data(i) = x.row(i);
+  const int gdim = 3;
+  const int rows = x.size() / gdim;
+  Field fx("x", {gdim}, rows);
+  for (int i = 0; i < rows; ++i)
+  {
+    std::span<double> x_row = x.subspan(i*gdim, gdim);
+    std::copy(x_row.begin(), x_row.end(), fx.data(i).begin());
+  }
   _fields.push_back(fx);
 }
-
-int Particles::add_particle(const Eigen::VectorXd& x, int cell)
+//------------------------------------------------------------------------
+std::size_t Particles::add_particle(
+  const std::span<double>& x, std::int32_t cell)
 {
   assert(cell < _cell_particles.size());
-  assert(x.size() == _fields[0].shape()[0]);
+  assert(x.size() == _fields[0].value_shape()[0]);
   int pidx;
   if (_free_list.empty())
   {
@@ -52,18 +58,19 @@ int Particles::add_particle(const Eigen::VectorXd& x, int cell)
   _fields[0].data(pidx) = x;
   return pidx;
 }
-
-void Particles::delete_particle(int cell, int p)
+//------------------------------------------------------------------------
+void Particles::delete_particle(std::int32_t cell, std::size_t p)
 {
   assert(cell < _cell_particles.size());
-  std::vector<int>& cp = _cell_particles[cell];
+  std::vector<std::size_t>& cp = _cell_particles[cell];
   assert(p < cp.size());
-  int pidx = cp[p];
+  std::size_t pidx = cp[p];
   cp.erase(cp.begin() + p);
   _free_list.push_back(pidx);
 }
-
-void Particles::add_field(std::string name, const std::vector<int>& shape)
+//------------------------------------------------------------------------
+void Particles::add_field(
+  std::string name, const std::vector<std::size_t>& shape)
 {
   for (const Field& f : _fields)
     if (name == f.name)

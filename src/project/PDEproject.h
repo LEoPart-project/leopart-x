@@ -12,12 +12,12 @@ namespace leopart
 namespace project
 {
 
-class PDEProjection
-{
-public:
-  PDEProjection(const Particles& pax){};
+// class PDEProjection
+// {
+// public:
+//   PDEProjection(const Particles& pax){};
 
-  void solve(){};
-};
+//   void solve(){};
+// };
 } // namespace project
 } // namespace leopart
