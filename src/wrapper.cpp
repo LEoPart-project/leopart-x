@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <concepts>
 #include <vector>
+#include <tuple>
 #include <dolfinx.h>
 #include <memory>
 // #include <pybind11/eigen.h>
@@ -93,7 +94,7 @@ PYBIND11_MODULE(pyleopart, m)
   m.def("random_reference_tetrahedron",
         [](const std::size_t n) {
           const int gdim = 3;
-          std::vector<double> array = leopart::generation::random_reference_tetrahedron(n);
+          std::vector<double> array = leopart::generation::random_reference_tetrahedron<double>(n);
           std::array<std::size_t, 2> shape = {array.size() / gdim, gdim};
           return py::array_t<double>(shape, array.data());
         },
@@ -101,12 +102,20 @@ PYBIND11_MODULE(pyleopart, m)
   m.def("random_reference_triangle",
         [](const std::size_t n) {
           const int gdim = 2;
-          std::vector<double> array = leopart::generation::random_reference_triangle(n);
+          std::vector<double> array = leopart::generation::random_reference_triangle<double>(n);
           std::array<std::size_t, 2> shape = {array.size() / gdim, gdim};
           return py::array_t<double>(shape, array.data());
         },
         py::return_value_policy::move);
-  // m.def("mesh_fill", &mesh_fill);
+  m.def("mesh_fill",
+        [](std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, double density) {
+          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, density);
+          const std::size_t gdim = mesh->geometry().dim();
+          std::array<std::size_t, 2> shape = {xp_all.size() / gdim, gdim};
+          auto ret_val = std::make_tuple<py::array_t<double>, std::vector<std::int32_t>>(
+            py::array_t<double>(shape, xp_all.data()), std::move(np_cells));
+          return ret_val;
+        }, py::return_value_policy::move);
 
   // // Transfer functions (probably shouldn't be interfaced)
   // m.def("get_particle_contributions", &get_particle_contributions);
