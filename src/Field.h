@@ -12,11 +12,11 @@
 namespace leopart
 {
 
-// template <class T>
-// concept field_dtype
-//   = std::is_floating_point_v<T> || std::is_integral_v<T>;
+template <class T>
+concept field_dtype
+  = std::is_floating_point_v<T> || std::is_integral_v<T>;
 
-template <std::floating_point T>
+template <field_dtype T>
 class Field
 {
 public:
@@ -29,6 +29,15 @@ public:
       _value_size *= q;
     _data.resize(_value_size * n);
   }
+
+  // Copy constructor
+  Field(const Field& field) = delete;
+
+  /// Move constructor
+  Field(Field&& field) = default;
+
+  /// Destructor
+  ~Field() = default;
 
   /// Get the data for a given particle p (const)
   std::span<const T> data(std::size_t p) const

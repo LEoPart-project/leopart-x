@@ -25,9 +25,9 @@ Particles<T>::Particles(const std::vector<T>& x,
     _cell_particles[cells[p]].push_back(p);
 
   const std::size_t rows = x.size() / gdim;
-  Field<T> fx("x", {gdim}, rows);
+  Field<T> fx(_posname, {gdim}, rows);
   std::copy(x.cbegin(), x.cend(), fx.data().begin());
-  _fields.push_back(fx);
+  _fields.emplace(std::make_pair(_posname, std::move(fx)));
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
@@ -35,15 +35,16 @@ std::size_t Particles<T>::add_particle(
   const std::span<T>& x, std::int32_t cell)
 {
   assert(cell < _cell_particles.size());
-  assert(x.size() == _fields[0].value_shape()[0]);
+  assert(x.size() == _fields.at(_posname).value_shape()[0]);
   int pidx;
   if (_free_list.empty())
   {
     // Need to create a new particle, and extend associated fields
-    // Get new particle index from size of "x" field (which must exist)
-    pidx = _fields[0].size();
+    // Get new particle index from size of _posname field
+    // (which must exist)
+    pidx = _fields.at(_posname).size();
     // Resize all fields
-    for (Field<T>& f : _fields)
+    for (auto& [f_name, f] : _fields)
       f.resize(f.size() + 1);
   }
   else
@@ -53,7 +54,7 @@ std::size_t Particles<T>::add_particle(
   }
 
   _cell_particles[cell].push_back(pidx);
-  _fields[0].data(pidx) = x;
+  _fields.at(_posname).data(pidx) = x;
   return pidx;
 }
 //------------------------------------------------------------------------
@@ -72,13 +73,13 @@ template <std::floating_point T>
 void Particles<T>::add_field(
   std::string name, const std::vector<std::size_t>& shape)
 {
-  for (const Field<T>& f : _fields)
-    if (name == f.name)
-      throw std::runtime_error("Field name \"" + name + "\" already in use");
+  if (_fields.find(name) != _fields.end())
+    throw std::runtime_error("Field name \"" + name + "\" already in use");
 
-  // Give the field the same number of entries as "x" (which must exist)
-  Field<T> f(name, shape, _fields[0].size());
-  _fields.push_back(f);
+  // Give the field the same number of entries as _posname
+  // (which must exist)
+  Field<T> f(name, shape, _fields.at(_posname).size());
+  _fields.emplace(std::make_pair(name, std::move(f)));
 }
 //------------------------------------------------------------------------
 template class Particles<double>;

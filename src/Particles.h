@@ -1,6 +1,7 @@
 #include "Field.h"
 #include <vector>
 #include <stdexcept>
+#include <map>
 
 #pragma once
 
@@ -16,6 +17,15 @@ public:
   Particles(
     const std::vector<T>& x, const std::vector<std::int32_t>& cells,
     const std::size_t gdim);
+
+  // Copy constructor
+  Particles(const Particles& ptcls) = delete;
+
+  /// Move constructor
+  Particles(Particles&& ptcls) = default;
+
+  /// Destructor
+  ~Particles() = default;
 
   /// Add a field to the particles, with name and value shape
   void add_field(std::string name, const std::vector<std::size_t>& shape);
@@ -34,36 +44,20 @@ public:
   /// @note \p p is cell-local index
   void delete_particle(std::int32_t cell, std::size_t p);
 
-  /// Field access (const)
-  const Field<T>& field(int i) const { return _fields[i]; }
-
-  /// Field access (non-const)
-  Field<T>& field(int i) { return _fields[i]; }
-
   /// Access field by name (convenience)
   /// Used in Python wrapper
   Field<T>& field(std::string w)
   {
-    for (Field<T>& f : _fields)
-    {
-      if (f.name == w)
-        return f;
-    }
-    throw std::out_of_range("Field not found");
+    return _fields.at(w);
   }
 
   // Const versions for internal use
   const Field<T>& field(std::string w) const
   {
-    for (const Field<T>& f : _fields)
-    {
-      if (f.name == w)
-        return f;
-    }
-    throw std::out_of_range("Field not found");
+    return _fields.at(w);
   }
 
-// private:
+private:
   // Indices of particles in each cell.
   std::vector<std::vector<std::size_t>> _cell_particles;
 
@@ -71,6 +65,7 @@ public:
   std::vector<std::size_t> _free_list;
 
   // Data in fields over particles
-  std::vector<Field<T>> _fields;
+  std::map<std::string, Field<T>> _fields;
+  const std::string _posname = "x";
 };
 } // namespace leopart
