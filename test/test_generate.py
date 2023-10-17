@@ -27,4 +27,3 @@ def test_simple_mesh_fill(dtype, cell_type):
     p = pyleopart.Particles(x, c)
     assert p.field("x").data().shape[1] == mesh.geometry.dim
     assert np.all(p.field("x").data() == x)
-
