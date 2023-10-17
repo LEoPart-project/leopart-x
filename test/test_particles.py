@@ -8,8 +8,8 @@ def test_simple_create():
     x = np.array([[1, 2, 3]], dtype=np.float64)
     p = pyleopart.Particles(x, [0])
     cp = p.cell_particles()
-    assert(cp[0][0] == 0)
-    assert((p.field("x").data(0) == [1, 2, 3]).all())
+    assert cp[0][0] == 0
+    assert np.all(p.field("x").data(0) == [1, 2, 3])
 
 
 def test_add_field():
@@ -17,15 +17,15 @@ def test_add_field():
     x = np.random.rand(n, 3)
     p = pyleopart.Particles(x, [0]*n)
     cp = p.cell_particles()
-    assert(len(cp[0]) == n)
+    assert len(cp[0]) == n
     p.add_field("w", [3])
-    assert(p.field("w").value_shape == [3])
+    assert p.field("w").value_shape == [3]
     p.add_field("u", [3, 2])   
     u = p.field("u")
-    assert(u.value_shape == [3, 2])
-    assert(u.value_size == 6)
+    assert u.value_shape == [3, 2]
+    assert u.value_size == 6
     with pytest.raises(IndexError):
-        r = p.field("r")
+        p.field("r")
 
 
 def test_add_delete_particles():
