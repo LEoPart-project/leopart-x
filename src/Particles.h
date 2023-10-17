@@ -7,13 +7,14 @@
 namespace leopart
 {
 
+template <std::floating_point T>
 class Particles
 {
 public:
   /// Initialise particles with position, the index of the containing cell
   /// and geometric dimension of the data.
   Particles(
-    const std::span<double>& x, const std::vector<std::int32_t>& cells,
+    const std::vector<T>& x, const std::vector<std::int32_t>& cells,
     const std::size_t gdim);
 
   /// Add a field to the particles, with name and value shape
@@ -27,23 +28,23 @@ public:
 
   /// Add a particle to a cell
   /// @return New particle index
-  std::size_t add_particle(const std::span<double>& x, std::int32_t cell);
+  std::size_t add_particle(const std::span<T>& x, std::int32_t cell);
 
   /// Delete particle p in cell
   /// @note \p p is cell-local index
   void delete_particle(std::int32_t cell, std::size_t p);
 
   /// Field access (const)
-  const Field& field(int i) const { return _fields[i]; }
+  const Field<T>& field(int i) const { return _fields[i]; }
 
   /// Field access (non-const)
-  Field& field(int i) { return _fields[i]; }
+  Field<T>& field(int i) { return _fields[i]; }
 
   /// Access field by name (convenience)
   /// Used in Python wrapper
-  Field& field(std::string w)
+  Field<T>& field(std::string w)
   {
-    for (Field& f : _fields)
+    for (Field<T>& f : _fields)
     {
       if (f.name == w)
         return f;
@@ -52,9 +53,9 @@ public:
   }
 
   // Const versions for internal use
-  const Field& field(std::string w) const
+  const Field<T>& field(std::string w) const
   {
-    for (const Field& f : _fields)
+    for (const Field<T>& f : _fields)
     {
       if (f.name == w)
         return f;
@@ -70,6 +71,6 @@ public:
   std::vector<std::size_t> _free_list;
 
   // Data in fields over particles
-  std::vector<Field> _fields;
+  std::vector<Field<T>> _fields;
 };
 } // namespace leopart

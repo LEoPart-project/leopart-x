@@ -36,27 +36,27 @@ using leopart::Particles;
 
 PYBIND11_MODULE(pyleopart, m)
 {
-  py::class_<Field>(m, "Field")
+  py::class_<Field<double>>(m, "Field")
       .def("data",
-          [](Field& self, int p)
+          [](Field<double>& self, int p)
           {
             std::span<double> array = self.data(p);
             return py::array_t<double>(array.size(), array.data(), py::cast(self));
           })
       .def("data",
-          [](Field& self)
+          [](Field<double>& self)
           {
             const std::size_t value_size = self.value_size();
             std::span<double> array = self.data();
             const std::array<std::size_t, 2> data_shape{array.size() / value_size, value_size};
             return py::array_t<double>(data_shape, array.data(), py::cast(self));
           })
-      .def_property_readonly("value_shape", &Field::Field::value_shape)
-      .def_property_readonly("value_size", &Field::Field::value_size)
-      .def_readonly("name", &Field::Field::name)
-      .def("resize", &Field::resize);
+      .def_property_readonly("value_shape", &Field<double>::Field::value_shape)
+      .def_property_readonly("value_size", &Field<double>::Field::value_size)
+      .def_readonly("name", &Field<double>::Field::name)
+      .def("resize", &Field<double>::resize);
 
-  py::class_<Particles>(m, "Particles")
+  py::class_<Particles<double>>(m, "Particles")
       .def(py::init<std::vector<double>&, const std::vector<std::int32_t>&,
            const std::size_t>())
       .def(py::init(
@@ -69,17 +69,17 @@ PYBIND11_MODULE(pyleopart, m)
                   px.data(), px.data() + px.size());
                 return Particles(p_data, p_cells, px.shape()[1]);
                }))
-      .def("add_field", &Particles::Particles::add_field)
+      .def("add_field", &Particles<double>::Particles::add_field)
       .def("add_particle",
-          [](Particles& self, std::vector<double>& px, std::int32_t cell) {
+          [](Particles<double>& self, std::vector<double>& px, std::int32_t cell) {
             self.add_particle(px, cell);
           })
-      .def("delete_particle", &Particles::Particles::delete_particle)
+      .def("delete_particle", &Particles<double>::Particles::delete_particle)
       .def("field",
-           py::overload_cast<std::string>(&Particles::Particles::field),
+           py::overload_cast<std::string>(&Particles<double>::Particles::field),
            py::return_value_policy::reference_internal)
       .def("cell_particles",
-           py::overload_cast<>(&Particles::Particles::cell_particles,
+           py::overload_cast<>(&Particles<double>::Particles::cell_particles,
                                py::const_));
 
   // // Projection classes
