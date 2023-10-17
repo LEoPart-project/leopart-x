@@ -35,6 +35,10 @@ namespace generation
 
 /// Create a set of points, distributed pro rata to the cell volumes.
 /// The total number of particles will approximately equal \p density particles.
+///
+/// @todo `dolfinx::fem::CoordinateElement::tabulate` performance is too slow
+/// to generate a uniquely random set of points in each cell
+///
 /// @return tuple with point coordinates, cell indices
 template<std::floating_point T>
 std::tuple<std::vector<T>, std::vector<std::int32_t>>
@@ -90,11 +94,12 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
   std::vector<std::int32_t> p_cells;
   std::vector<T> xp_all;
 
+  // Generate coordinates on reference element
+  const std::vector<T> X = random_reference<T>(celltype[0], np_per_cell);
+  cmap.tabulate(0, X, Xshape, phi_b);
+
   for (int c = 0; c < num_cells; ++c)
   {
-    // Generate coordinates on reference element
-    const std::vector<T> X = random_reference<T>(celltype[0], np_per_cell);
-
     // Extract cell geometry
     auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::
         MDSPAN_IMPL_PROPOSED_NAMESPACE::submdspan(
@@ -103,8 +108,7 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
       for (std::size_t j = 0; j < gdim; ++j)
         coordinate_dofs(i, j) = x_g[3 * x_dofs[i] + j];
 
-    // Tabulate dof coordinates on cell
-    cmap.tabulate(0, X, Xshape, phi_b);
+    // Tabulate physical coordinates on cell
     cmap.push_forward(x, coordinate_dofs, phi);
 
     // Fill data to be returned

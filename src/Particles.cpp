@@ -11,21 +11,21 @@
 using namespace leopart;
 
 Particles::Particles(const std::span<double>& x,
-                     const std::vector<std::int32_t>& cells)
+                     const std::vector<std::int32_t>& cells,
+                     const std::size_t gdim)
 {
   // Find max cell index, and create cell->particle map
   auto max_cell_it = std::max_element(cells.begin(), cells.end());
   if (max_cell_it == cells.end())
     throw std::runtime_error("Error in cells data");
-  const int max_cell = *max_cell_it;
+  const std::int32_t max_cell = *max_cell_it;
   _cell_particles.resize(max_cell + 1);
   for (std::size_t p = 0; p < cells.size(); ++p)
     _cell_particles[cells[p]].push_back(p);
 
-  const int gdim = 3;
-  const int rows = x.size() / gdim;
+  const std::size_t rows = x.size() / gdim;
   Field fx("x", {gdim}, rows);
-  for (int i = 0; i < rows; ++i)
+  for (std::size_t i = 0; i < rows; ++i)
   {
     std::span<double> x_row = x.subspan(i*gdim, gdim);
     std::copy(x_row.begin(), x_row.end(), fx.data(i).begin());

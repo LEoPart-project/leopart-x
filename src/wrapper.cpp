@@ -57,14 +57,17 @@ PYBIND11_MODULE(pyleopart, m)
       .def("resize", &Field::resize);
 
   py::class_<Particles>(m, "Particles")
-      .def(py::init<std::vector<double>&, const std::vector<std::int32_t>&>())
+      .def(py::init<std::vector<double>&, const std::vector<std::int32_t>&,
+           const std::size_t>())
       .def(py::init(
             [](const py::array_t<double, py::array::c_style>& px,
                const std::vector<std::int32_t>& p_cells) {
-                if (px.shape()[1] != 3)
-                  throw std::invalid_argument("Particle position value size expected to be 3");
-                std::vector<double> p_data = std::vector<double>(px.data(), px.data() + px.size());
-                return Particles(p_data, p_cells);
+                if ((px.shape()[1] != 2) and (px.shape()[1] != 3))
+                  throw std::invalid_argument(
+                    "Particle position value size expected to be 2 or 3");
+                std::vector<double> p_data = std::vector<double>(
+                  px.data(), px.data() + px.size());
+                return Particles(p_data, p_cells, px.shape()[1]);
                }))
       .def("add_field", &Particles::Particles::add_field)
       .def("add_particle",

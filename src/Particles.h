@@ -10,9 +10,11 @@ namespace leopart
 class Particles
 {
 public:
-  /// Initialise particles with position and the index of the cell which
-  /// contains them.
-  Particles(const std::span<double>& x, const std::vector<std::int32_t>& cells);
+  /// Initialise particles with position, the index of the containing cell
+  /// and geometric dimension of the data.
+  Particles(
+    const std::span<double>& x, const std::vector<std::int32_t>& cells,
+    const std::size_t gdim);
 
   /// Add a field to the particles, with name and value shape
   void add_field(std::string name, const std::vector<std::size_t>& shape);
