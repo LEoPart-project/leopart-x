@@ -13,16 +13,16 @@ using namespace leopart;
 template <std::floating_point T>
 Particles<T>::Particles(const std::vector<T>& x,
                         const std::vector<std::int32_t>& cells,
-                        const std::size_t gdim)
+                        const std::size_t gdim) : _particle_to_cell(cells)
 {
   // Find max cell index, and create cell->particle map
   auto max_cell_it = std::max_element(cells.begin(), cells.end());
   if (max_cell_it == cells.end())
     throw std::runtime_error("Error in cells data");
   const std::int32_t max_cell = *max_cell_it;
-  _cell_particles.resize(max_cell + 1);
+  _cell_to_particle.resize(max_cell + 1);
   for (std::size_t p = 0; p < cells.size(); ++p)
-    _cell_particles[cells[p]].push_back(p);
+    _cell_to_particle[cells[p]].push_back(p);
 
   const std::size_t rows = x.size() / gdim;
   Field<T> fx(_posname, {gdim}, rows);
@@ -34,7 +34,7 @@ template <std::floating_point T>
 std::size_t Particles<T>::add_particle(
   const std::span<T>& x, std::int32_t cell)
 {
-  assert(cell < _cell_particles.size());
+  assert(cell < _cell_to_particle.size());
   assert(x.size() == _fields.at(_posname).value_shape()[0]);
   int pidx;
   if (_free_list.empty())
@@ -53,7 +53,7 @@ std::size_t Particles<T>::add_particle(
     _free_list.pop_back();
   }
 
-  _cell_particles[cell].push_back(pidx);
+  _cell_to_particle[cell].push_back(pidx);
   _fields.at(_posname).data(pidx) = x;
   return pidx;
 }
@@ -61,8 +61,8 @@ std::size_t Particles<T>::add_particle(
 template <std::floating_point T>
 void Particles<T>::delete_particle(std::int32_t cell, std::size_t p)
 {
-  assert(cell < _cell_particles.size());
-  std::vector<std::size_t>& cp = _cell_particles[cell];
+  assert(cell < _cell_to_particle.size());
+  std::vector<std::size_t>& cp = _cell_to_particle[cell];
   assert(p < cp.size());
   std::size_t pidx = cp[p];
   cp.erase(cp.begin() + p);

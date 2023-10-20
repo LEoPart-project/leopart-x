@@ -9,6 +9,7 @@
 
 using namespace leopart;
 
+// //----------------------------------------------------------------------------
 // Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
 // transfer::get_particle_contributions(
 //     const Particles& pax,
@@ -161,65 +162,65 @@ using namespace leopart;
 //     row_offset += cell_particles.size();
 //   }
 // }
-// //----------------------------------------------------------------------------
-// template <typename T>
+//----------------------------------------------------------------------------
+// template <dolfinx::scalar T, std::floating_point U>
 // void transfer::transfer_to_particles(
-//     Particles& pax, Field& field,
-//     std::shared_ptr<const dolfinx::function::Function<T>> f,
-//     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
-//         basis_values)
+//     Particles<T>& pax, Field<T>& field,
+//     std::shared_ptr<const dolfinx::fem::Function<T>> f,
+//     const std::vector<T>& basis_values,
+//     const std::vector<std::size_t>& basis_shape)
 // {
-//   // Get element
-//   assert(f->function_space()->element());
-//   std::shared_ptr<const dolfinx::fem::FiniteElement> element
-//       = f->function_space()->element();
-//   assert(element);
-//   const int block_size = element->block_size();
-//   const int value_size = element->value_size() / block_size;
-//   const int space_dimension = element->space_dimension() / block_size;
-//   assert(basis_values.cols() == value_size * space_dimension);
-//   assert(field.value_size() == value_size);
+  // // Get element
+  // assert(f->function_space()->element());
+  // std::shared_ptr<const dolfinx::fem::FiniteElement> element
+  //     = f->function_space()->element();
+  // assert(element);
+  // const int block_size = element->block_size();
+  // const int value_size = element->value_size() / block_size;
+  // const int space_dimension = element->space_dimension() / block_size;
+  // assert(basis_values.cols() == value_size * space_dimension);
+  // assert(field.value_size() == value_size);
 
-//   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = f->function_space()->mesh();
-//   const int tdim = mesh->topology().dim();
-//   int ncells = mesh->topology().index_map(tdim)->size_local();
+  // std::shared_ptr<const dolfinx::mesh::Mesh> mesh = f->function_space()->mesh();
+  // const int tdim = mesh->topology().dim();
+  // int ncells = mesh->topology().index_map(tdim)->size_local();
 
-//   // Get particles in each cell
-//   const std::vector<std::vector<int>>& cell_particles = pax.cell_particles();
+  // // Get particles in each cell
+  // const std::vector<std::vector<int>>& cell_particles = pax.cell_particles();
 
-//   // Count up particles in each cell
-//   std::shared_ptr<const dolfinx::fem::DofMap> dm
-//       = f->function_space()->dofmap();
+  // // Count up particles in each cell
+  // std::shared_ptr<const dolfinx::fem::DofMap> dm
+  //     = f->function_space()->dofmap();
 
-//   // Const array of expansion coefficients
-//   const Eigen::Matrix<T, Eigen::Dynamic, 1>& f_array = f->x()->array();
+  // // Const array of expansion coefficients
+  // const Eigen::Matrix<T, Eigen::Dynamic, 1>& f_array = f->x()->array();
 
-//   int idx = 0;
-//   for (int c = 0; c < ncells; ++c)
-//   {
-//     auto dofs = dm->cell_dofs(c);
-//     Eigen::VectorXd vals(dofs.size());
-//     for (int k = 0; k < dofs.size(); ++k)
-//     {
-//       vals[k] = f_array[dofs[k]];
-//     }
-//     // Cast as matrix of size [block_size, space_dimension/block_size]
-//     Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
-//                                    Eigen::ColMajor>>
-//         vals_mat(vals.data(), block_size, space_dimension);
+  // int idx = 0;
+  // for (int c = 0; c < ncells; ++c)
+  // {
+  //   auto dofs = dm->cell_dofs(c);
+  //   Eigen::VectorXd vals(dofs.size());
+  //   for (int k = 0; k < dofs.size(); ++k)
+  //   {
+  //     vals[k] = f_array[dofs[k]];
+  //   }
+  //   // Cast as matrix of size [block_size, space_dimension/block_size]
+  //   Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
+  //                                  Eigen::ColMajor>>
+  //       vals_mat(vals.data(), block_size, space_dimension);
 
-//     for (int pidx : cell_particles[c])
-//     {
-//       Eigen::Map<Eigen::VectorXd> ptr = field.data(pidx);
-//       ptr.setZero();
-//       Eigen::Map<const Eigen::VectorXd> q(basis_values.row(idx++).data(),
-//                                           space_dimension);
+  //   for (int pidx : cell_particles[c])
+  //   {
+  //     Eigen::Map<Eigen::VectorXd> ptr = field.data(pidx);
+  //     ptr.setZero();
+  //     Eigen::Map<const Eigen::VectorXd> q(basis_values.row(idx++).data(),
+  //                                         space_dimension);
 
-//       ptr = vals_mat * q;
-//     }
-//   }
+  //     ptr = vals_mat * q;
+  //   }
+  // }
 // }
-// //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 // std::pair<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>,
 //           Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>>
 // transfer::eval_particle_cell_contributions(
@@ -241,6 +242,7 @@ using namespace leopart;
 //   }
 //   return std::make_pair(q, l);
 // }
+// //----------------------------------------------------------------------------
 
 // // Explicit instantiation of template functions needed, see
 // // https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file
@@ -255,3 +257,4 @@ using namespace leopart;
 //     const Field&,
 //     const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
 //                        Eigen::RowMajor>&);
+// //----------------------------------------------------------------------------

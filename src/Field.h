@@ -51,7 +51,10 @@ public:
     return std::span<double>(_data).subspan(_value_size * p, _value_size);
   }
 
-  /// Get the associated field data
+  /// Get the associated field data (const)
+  std::span<const T> data() const { return std::span<const T>(_data); }
+
+  /// Get the associated field data (non-const)
   std::span<T> data() { return std::span<T>(_data); };
 
   /// Value shape

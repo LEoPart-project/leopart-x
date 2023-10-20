@@ -31,9 +31,15 @@ public:
   void add_field(std::string name, const std::vector<std::size_t>& shape);
 
   /// List of particles in each cell
-  const std::vector<std::vector<std::size_t>>& cell_particles() const
+  const std::vector<std::vector<std::size_t>>& cell_to_particle() const
   {
-    return _cell_particles;
+    return _cell_to_particle;
+  }
+
+  /// List of unique cell assigned to enclose each particle
+  const std::vector<std::int32_t>& particle_to_cell() const
+  {
+    return _particle_to_cell;
   }
 
   /// Add a particle to a cell
@@ -59,7 +65,10 @@ public:
 
 private:
   // Indices of particles in each cell.
-  std::vector<std::vector<std::size_t>> _cell_particles;
+  std::vector<std::vector<std::size_t>> _cell_to_particle;
+
+  // Incides of cells to which particles belong
+  std::vector<std::int32_t> _particle_to_cell;
 
   // List of particles which have been deleted, and available for reallocation
   std::vector<std::size_t> _free_list;
