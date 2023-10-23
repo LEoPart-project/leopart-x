@@ -20,9 +20,18 @@ using leopart::math::mdspan_t;
 using leopart::math::mdspan_ct;
 
 /// Transfer information from the FE \p field to the particles by
-/// evaluating dofs at particle positions.
+/// interpolating the finite element function at particles' positions.
+/// Given \f(n_p\f) particles with positions \f(x_p\f), we compute
+///  particle data \f(u_p\f)
+/// 
+/// \f[
+///    u_p = u(x_p), \quad p = 1,\ldots,n_p
+/// \f]
 ///
 /// @tparam T The function scalar type.
+/// @param pax Particles collection
+/// @param field Field data into which to store the interpolation
+/// @param f The finite element function to be interpolated
 template <dolfinx::scalar T>
 void transfer_to_particles(
     const Particles<T>& pax, Field<T>& field,
@@ -50,8 +59,10 @@ void transfer_to_particles(
 ///    u_h(x_p) v(x_p) = u_p v(x_p) \quad \forall v \in V, \; p = 1,\ldots,n_p.
 /// \f]
 ///
-/// Here \f(n_p\f) is the number of particles and \f(V\f) is the
-/// function space to which the provided finite element function belongs.
+/// Here \f(u_p\f) is the \f(p\f)th particle's data, \f(u_p\f) is the \f(p\f)th
+/// particle's position, \f(n_p\f) is the total number of particles
+/// and \f(V\f) is the function space to which the provided finite element
+/// function belongs.
 ///
 /// @tparam T The function scalar type
 /// @tparam U The function geometry type
