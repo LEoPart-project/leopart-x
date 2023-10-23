@@ -124,10 +124,6 @@ PYBIND11_MODULE(pyleopart, m)
         }, py::return_value_policy::move);
 
   // Transfer functions
-  // m.def("get_particle_contributions",
-  //       [](const Particles<double>& pax, const dolfinx::fem::FunctionSpace<double>& function_space){
-  //         return leopart::transfer::get_particle_contributions(pax, function_space);
-  //       });
   m.def("transfer_to_particles", &leopart::transfer::transfer_to_particles<dtype>);
   m.def("transfer_to_function",
         [](std::shared_ptr<dolfinx::fem::Function<dtype>> f,
@@ -136,10 +132,12 @@ PYBIND11_MODULE(pyleopart, m)
           return leopart::transfer::transfer_to_function<dtype, dtype_geom>(
             f, pax, field);
         });
+
+  // Utility functions
   m.def("evaluate_basis_functions",
         [](std::shared_ptr<dolfinx::fem::FunctionSpace<dtype>> V,
            std::vector<dtype>& x,
            std::vector<std::int32_t>& cells) {
-          return leopart::transfer::evaluate_basis_functions<dtype>(*V, x, cells);
+          return leopart::utils::evaluate_basis_functions<dtype>(*V, x, cells);
         });
 }
