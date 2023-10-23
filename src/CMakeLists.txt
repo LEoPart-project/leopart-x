@@ -18,7 +18,7 @@ endif()
 # set(LEOPART_DIRS advect common io project external)
 
 # Executable
-add_library(${PROJECT_NAME} SHARED Particles.cpp transfer.cpp)
+add_library(${PROJECT_NAME} SHARED Particles.cpp)
 
 # Add source to leopart target, and get sets of header files
 # foreach(DIR ${LEOPART_DIRS})
