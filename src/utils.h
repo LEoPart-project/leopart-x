@@ -30,7 +30,7 @@ void print_mdspan(
 
 
 /// Adapted from dolfinx_mpc::utils::evaluate_basis_functions
-/// Authored by Jorgen S. Dokken
+/// originally authored by Jorgen S. Dokken
 ///
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
@@ -121,12 +121,9 @@ evaluate_basis_functions(const dolfinx::fem::FunctionSpace<U>& V,
     cell_info = std::span(mesh->topology()->get_cell_permutation_info());
   }
 
-  using cmdspan4_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-      const U, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 4>>;
-  using mdspan2_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-      U, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-  using mdspan3_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-      U, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 3>>;
+  using cmdspan4_t = leopart::math::mdspan_ct<U, 4>;
+  using mdspan2_t = leopart::math::mdspan_t<U, 2>;
+  using mdspan3_t = leopart::math::mdspan_t<U, 3>;
 
   // Create buffer for coordinate dofs and point in physical space
   std::vector<U> coord_dofs_b(num_dofs_g * gdim);
@@ -242,14 +239,10 @@ evaluate_basis_functions(const dolfinx::fem::FunctionSpace<U>& V,
   std::vector<U> basis_valuesb(num_basis_values);
   mdspan2_t basis_values(basis_valuesb.data(), basis_shape[2], basis_shape[3]);
 
-  using xu_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-      U, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-  using xU_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-      const U, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-  using xJ_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-      const U, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-  using xK_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-      const U, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
+  using xu_t = leopart::math::mdspan_t<U, 2>;
+  using xU_t = leopart::math::mdspan_ct<U, 2>;
+  using xJ_t = leopart::math::mdspan_ct<U, 2>;
+  using xK_t = leopart::math::mdspan_ct<U, 2>;
   auto push_forward_fn
       = element->basix_element().template map_fn<xu_t, xU_t, xJ_t, xK_t>();
 
