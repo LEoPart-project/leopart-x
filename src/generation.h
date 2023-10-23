@@ -39,6 +39,10 @@ namespace generation
 /// @todo `dolfinx::fem::CoordinateElement::tabulate` performance is too slow
 /// to generate a uniquely random set of points in each cell
 ///
+/// @tparam T Position data type
+/// @param[in] n Number of particles
+/// @param[in] dim Spatial dimension
+///
 /// @return tuple with point coordinates, cell indices
 template<std::floating_point T>
 std::tuple<std::vector<T>, std::vector<std::int32_t>>
@@ -121,7 +125,12 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
 }
 
 /// Create a set of n points at random positions within the cell.
-/// @return
+///
+/// @tparam Position data type
+/// @param[in] celltype The DOLFINx cell type
+/// @param[in] n Number of particles per cell
+///
+/// @return Array of \f(\mathbb{R}^d\f)-coordinates
 template<std::floating_point T>
 std::vector<T> random_reference(dolfinx::mesh::CellType celltype,
                                 std::size_t n)
@@ -130,6 +139,10 @@ std::vector<T> random_reference(dolfinx::mesh::CellType celltype,
     return random_reference_triangle<T>(n);
   if (celltype == dolfinx::mesh::CellType::tetrahedron)
     return random_reference_tetrahedron<T>(n);
+  if (celltype == dolfinx::mesh::CellType::quadrilateral)
+    return random_reference_cube<T>(n, 2);
+  if (celltype == dolfinx::mesh::CellType::hexahedron)
+    return random_reference_cube<T>(n, 3);
 
   throw std::runtime_error("Unsupported cell type");
   return std::vector<T>{};
@@ -137,9 +150,13 @@ std::vector<T> random_reference(dolfinx::mesh::CellType celltype,
 
 /// Create a set of n points at random positions within the reference
 /// tetrahedron
-/// @return Array of R^3-coordinates
+///
+/// @tparam T Position data type
+/// @param[in] n Number of particles
+///
+/// @return Array of \f(\mathbb{R}^3\f)-coordinates
 template<std::floating_point T>
-std::vector<double> random_reference_tetrahedron(std::size_t n)
+std::vector<T> random_reference_tetrahedron(std::size_t n)
 {
   const std::size_t gdim = 3;
   std::vector<T> p(n * gdim, 1.0);
@@ -188,9 +205,13 @@ std::vector<double> random_reference_tetrahedron(std::size_t n)
 
 /// Create a set of n points at random positions within the reference
 /// triangle
-/// @return Array of R^2-coordinates
+///
+/// @tparam T Position data type
+/// @param[in] n Number of particles
+///
+/// @return Array of \f(\mathbb{R}^2\f)-coordinates
 template<std::floating_point T>
-std::vector<T> random_reference_triangle(std::size_t n)
+std::vector<T> random_reference_triangle(const std::size_t n)
 {
   const std::size_t gdim = 2;
   std::vector<T> p(n * gdim);
@@ -218,6 +239,28 @@ std::vector<T> random_reference_triangle(std::size_t n)
   
   for (T& val : p)
     val /= 2.0;
+  return p;
+}
+
+/// Create a set of points in the given dimension, \f(d\f)
+/// at random positions within the reference domain \f( (0, 1)^d \f)
+///
+/// @tparam T Position data type
+/// @param[in] n Number of particles
+/// @param[in] gdim Spatial dimension
+///
+/// @return Array of \f(\mathbb{R}^d\f)-coordinates
+template<std::floating_point T>
+std::vector<T> random_reference_cube(
+  const std::size_t n, const std::size_t gdim)
+{
+  std::vector<T> p(n * gdim);
+
+  std::random_device rd;
+  std::mt19937 rgen(rd());
+  std::uniform_real_distribution<T> dist(0.0, 1.0);
+
+  std::generate(p.begin(), p.end(), [&dist, &rgen]() { return dist(rgen); });
   return p;
 }
 
