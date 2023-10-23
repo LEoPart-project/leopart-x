@@ -42,8 +42,22 @@ void transfer_to_particles(
 }
 
 
-/// Use basis values to transfer function from field given by value_index to
-/// dolfinx Function
+/// Transfer the provided particle field data to the finite element
+/// function using local l_2 projection.
+/// We solve the problem: find \f(u_h \in V\f) such that
+///
+/// \f[
+///    u_h(x_p) v(x_p) = u_p v(x_p) \quad \forall v \in V, \; p = 1,\ldots,n_p.
+/// \f]
+///
+/// Here \f(n_p\f) is the number of particles and \f(V\f) is the
+/// function space to which the provided finite element function belongs.
+///
+/// @tparam T The function scalar type
+/// @tparam U The function geometry type
+/// @param f The finite element function
+/// @param pax The particles collection
+/// @param field The field data to be transferred
 template <dolfinx::scalar T, std::floating_point U>
 void transfer_to_function(
     std::shared_ptr<dolfinx::fem::Function<T>> f,
