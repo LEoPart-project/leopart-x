@@ -194,14 +194,14 @@ void transfer_to_function_constrained(
           *f->function_space(), pax.field("x").data(), pax.particle_to_cell());
   const mdspan_ct<T, 3> basis_evals_md(basis_evals.data(), basis_shape);
 
-  // QuadProg specifics
+  // QuadProg specifics for constraints
+  // CE^T x + ce0 =  0
+  // CI^T x + ci0 >= 0
   std::vector<T> CE_data(space_dimension, 0.0),
       CI_data(space_dimension * space_dimension * value_size * 2, 0.0);
   quadprogpp::mdMatrix<T> CE(CE_data.data(), space_dimension, 0);
   quadprogpp::mdMatrix<T> CI(CI_data.data(), space_dimension,
                              space_dimension * value_size * 2);
-  // quadprogpp::Vector<T> ce0(0.0, 0), ci0(0.0, space_dimension * value_size *
-  // 2);
   std::vector<T> ce0(0, 0.0), ci0(space_dimension * value_size * 2, 0.0);
 
   for (std::size_t i = 0; i < space_dimension; i++)
