@@ -151,6 +151,9 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
 /// Transfer the provided particle field data to the finite element
 /// function using constrained local l_2 projection.
 ///
+/// @note Currently only data and functions with value shape = 1
+/// are supported.
+///
 /// @tparam T The function scalar type
 /// @tparam U The function geometry type
 /// @param f The finite element function
