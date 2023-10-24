@@ -7,8 +7,8 @@ import pytest
 def test_simple_create():
     x = np.array([[1, 2, 3]], dtype=np.float64)
     p = pyleopart.Particles(x, [0])
-    cp = p.cell_particles()
-    assert cp[0][0] == 0
+    c2p = p.cell_to_particle()
+    assert c2p[0][0] == 0
     assert np.all(p.field("x").data(0) == [1, 2, 3])
 
 
@@ -16,8 +16,8 @@ def test_add_field():
     n = 20
     x = np.random.rand(n, 3)
     p = pyleopart.Particles(x, [0]*n)
-    cp = p.cell_particles()
-    assert len(cp[0]) == n
+    c2p = p.cell_to_particle()
+    assert len(c2p[0]) == n
     p.add_field("w", [3])
     assert p.field("w").value_shape == [3]
     p.add_field("u", [3, 2])   
@@ -36,15 +36,15 @@ def test_add_delete_particles():
     
     # Add to cell 12
     p.add_particle(x, 12)
-    cp = p.cell_particles()
-    assert(len(cp[12]) == 2)
+    c2p = p.cell_to_particle()
+    assert(len(c2p[12]) == 2)
 
     # Delete from cell 1
     p.delete_particle(0, 0)
-    cp = p.cell_particles()
-    assert(len(cp[0]) == 0)
+    c2p = p.cell_to_particle()
+    assert(len(c2p[0]) == 0)
 
     # Add to cell 0
     p.add_particle(x, 1)
-    cp = p.cell_particles()
-    assert(cp[1][1] == 0)
+    c2p = p.cell_to_particle()
+    assert(c2p[1][1] == 0)
