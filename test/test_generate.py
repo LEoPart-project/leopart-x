@@ -7,19 +7,21 @@ import pyleopart
 
 
 def create_mesh(cell_type, dtype, n):
-    if cell_type in (dolfinx.mesh.CellType.triangle,):
-        mesh = dolfinx.mesh.create_unit_square(
-            MPI.COMM_WORLD, n, n, cell_type=cell_type, dtype=dtype)
-        return mesh
-    elif cell_type in (dolfinx.mesh.CellType.tetrahedron,):
-        mesh = dolfinx.mesh.create_unit_cube(
-            MPI.COMM_WORLD, n, n, n, cell_type=cell_type, dtype=dtype)
-        return mesh
+    mesh_fn = {
+        2: dolfinx.mesh.create_unit_square,
+        3: dolfinx.mesh.create_unit_cube
+    }
+
+    cell_dim = dolfinx.mesh.cell_dim(cell_type)
+    return mesh_fn[cell_dim](MPI.COMM_WORLD, *[n]*cell_dim,
+                             cell_type=cell_type, dtype=dtype)
 
 
 @pytest.mark.parametrize("dtype", [np.float64])
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle,
-                                       dolfinx.mesh.CellType.tetrahedron])
+                                       dolfinx.mesh.CellType.tetrahedron,
+                                       dolfinx.mesh.CellType.quadrilateral,
+                                       dolfinx.mesh.CellType.hexahedron])
 def test_simple_mesh_fill(dtype, cell_type):
     num_p = 10
     mesh = create_mesh(cell_type, dtype, n=2)

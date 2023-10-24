@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <dolfinx.h>
+#include <basix/math.h>
 
 namespace leopart::math
 {

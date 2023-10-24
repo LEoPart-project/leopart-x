@@ -15,15 +15,15 @@ if (NOT TARGET dolfinx)
 endif()
 
 # Source directories
-# set(LEOPART_DIRS advect common io project external)
+set(LEOPART_DIRS external)
 
 # Executable
 add_library(${PROJECT_NAME} SHARED Particles.cpp)
 
 # Add source to leopart target, and get sets of header files
-# foreach(DIR ${LEOPART_DIRS})
-#   add_subdirectory(${DIR})
-# endforeach()
+foreach(DIR ${LEOPART_DIRS})
+  add_subdirectory(${DIR})
+endforeach()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
                            "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>")

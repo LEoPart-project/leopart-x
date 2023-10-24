@@ -128,6 +128,14 @@ PYBIND11_MODULE(pyleopart, m)
           return leopart::transfer::transfer_to_function<dtype, dtype_geom>(
             f, pax, field);
         });
+  m.def("transfer_to_function_constrained",
+        [](std::shared_ptr<dolfinx::fem::Function<dtype>> f,
+        const Particles<dtype>& pax,
+        const Field<dtype>& field,
+        const dtype lb, const dtype ub) {
+          return leopart::transfer::transfer_to_function_constrained<dtype, dtype_geom>(
+            f, pax, field, lb, ub);
+        });
 
   // Utility functions
   m.def("evaluate_basis_functions",
