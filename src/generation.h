@@ -7,10 +7,10 @@
 
 #include <cinttypes>
 #include <dolfinx.h>
+#include <random>
 #include <span>
 #include <stdexcept>
 #include <tuple>
-#include <random>
 #include <vector>
 
 namespace dolfinx
@@ -165,8 +165,7 @@ std::vector<T> random_reference_tetrahedron(std::size_t n)
   std::uniform_real_distribution<T> dist(-1.0, 1.0);
 
   for (int i = 0; i < n; ++i)
-  {    
-    // Eigen::RowVector3d r = Eigen::Vector3d::Random();
+  {
     std::generate(r.begin(), r.end(),
                   [&dist, &rgen]() { return dist(rgen); });
     T& x = r[0];
