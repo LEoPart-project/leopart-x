@@ -1,45 +1,50 @@
-// Copyright: (c) 2020 Chris Richardson and Jakob Maljaars
+// Copyright: (c) 2020-2023 Chris Richardson, Jakob Maljaars and Nathan Sime
 // This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
-#include "Particles.h"
 #include <cassert>
 #include <dolfinx.h>
 
+#include "Particles.h"
+
 using namespace leopart;
 
-Particles::Particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
-                                        Eigen::RowMajor>& x,
-                     const std::vector<int>& cells)
+template <std::floating_point T>
+Particles<T>::Particles(const std::vector<T>& x,
+                        const std::vector<std::int32_t>& cells,
+                        const std::size_t gdim) : _particle_to_cell(cells)
 {
   // Find max cell index, and create cell->particle map
   auto max_cell_it = std::max_element(cells.begin(), cells.end());
   if (max_cell_it == cells.end())
     throw std::runtime_error("Error in cells data");
-  const int max_cell = *max_cell_it;
-  _cell_particles.resize(max_cell + 1);
+  const std::int32_t max_cell = *max_cell_it;
+  _cell_to_particle.resize(max_cell + 1);
   for (std::size_t p = 0; p < cells.size(); ++p)
-    _cell_particles[cells[p]].push_back(p);
+    _cell_to_particle[cells[p]].push_back(p);
 
-  Field fx("x", {{(int)x.cols()}}, x.rows());
-  for (int i = 0; i < x.rows(); ++i)
-    fx.data(i) = x.row(i);
-  _fields.push_back(fx);
+  const std::size_t rows = x.size() / gdim;
+  Field<T> fx(_posname, {gdim}, rows);
+  std::copy(x.cbegin(), x.cend(), fx.data().begin());
+  _fields.emplace(std::make_pair(_posname, std::move(fx)));
 }
-
-int Particles::add_particle(const Eigen::VectorXd& x, int cell)
+//------------------------------------------------------------------------
+template <std::floating_point T>
+std::size_t Particles<T>::add_particle(
+  const std::span<T>& x, std::int32_t cell)
 {
-  assert(cell < _cell_particles.size());
-  assert(x.size() == _fields[0].shape()[0]);
+  assert(cell < _cell_to_particle.size());
+  assert(x.size() == _fields.at(_posname).value_shape()[0]);
   int pidx;
   if (_free_list.empty())
   {
     // Need to create a new particle, and extend associated fields
-    // Get new particle index from size of "x" field (which must exist)
-    pidx = _fields[0].size();
+    // Get new particle index from size of _posname field
+    // (which must exist)
+    pidx = _fields.at(_posname).size();
     // Resize all fields
-    for (Field& f : _fields)
+    for (auto& [f_name, f] : _fields)
       f.resize(f.size() + 1);
   }
   else
@@ -48,28 +53,34 @@ int Particles::add_particle(const Eigen::VectorXd& x, int cell)
     _free_list.pop_back();
   }
 
-  _cell_particles[cell].push_back(pidx);
-  _fields[0].data(pidx) = x;
+  _cell_to_particle[cell].push_back(pidx);
+  _fields.at(_posname).data(pidx) = x;
   return pidx;
 }
-
-void Particles::delete_particle(int cell, int p)
+//------------------------------------------------------------------------
+template <std::floating_point T>
+void Particles<T>::delete_particle(std::int32_t cell, std::size_t p)
 {
-  assert(cell < _cell_particles.size());
-  std::vector<int>& cp = _cell_particles[cell];
+  assert(cell < _cell_to_particle.size());
+  std::vector<std::size_t>& cp = _cell_to_particle[cell];
   assert(p < cp.size());
-  int pidx = cp[p];
+  std::size_t pidx = cp[p];
   cp.erase(cp.begin() + p);
   _free_list.push_back(pidx);
 }
-
-void Particles::add_field(std::string name, const std::vector<int>& shape)
+//------------------------------------------------------------------------
+template <std::floating_point T>
+void Particles<T>::add_field(
+  std::string name, const std::vector<std::size_t>& shape)
 {
-  for (const Field& f : _fields)
-    if (name == f.name)
-      throw std::runtime_error("Field name \"" + name + "\" already in use");
+  if (_fields.find(name) != _fields.end())
+    throw std::runtime_error("Field name \"" + name + "\" already in use");
 
-  // Give the field the same number of entries as "x" (which must exist)
-  Field f(name, shape, _fields[0].size());
-  _fields.push_back(f);
+  // Give the field the same number of entries as _posname
+  // (which must exist)
+  Field<T> f(name, shape, _fields.at(_posname).size());
+  _fields.emplace(std::make_pair(name, std::move(f)));
 }
+//------------------------------------------------------------------------
+template class Particles<double>;
+//------------------------------------------------------------------------

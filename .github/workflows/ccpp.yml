@@ -1,24 +1,19 @@
 name: C/C++ CI
 
-on: [push]
+on:
+  pull_request:
+    branches:
+      - master
 
 jobs:
-  format:
-    runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: install_clang
-      run: pip3 install clang-format==9.0.0 && export CI=1
-    - name: run_formatter_script
-      run: ./scripts/run-clang-format.sh
-
   build:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:latest
+    container: dolfinx/dolfinx:v0.7.0
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+    - name: install pybind11
+      run: pip3 install pybind11[global]
     - name: build
-      run: cd src && python3 setup.py install
+      run: cd src && pip3 install .
     - name: test
       run: cd test && python3 -m pytest -s -v .

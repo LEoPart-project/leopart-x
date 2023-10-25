@@ -1,75 +1,85 @@
-#include "Field.h"
-#include <Eigen/Dense>
-#include <vector>
+// Copyright: (c) 2020-2023 Chris Richardson, Jakob Maljaars and Nathan Sime
+// This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+// License: GNU Lesser GPL version 3 or any later version
+// SPDX-License-Identifier:    LGPL-3.0-or-later
 
 #pragma once
+
+#include "Field.h"
+#include <vector>
+#include <stdexcept>
+#include <map>
 
 namespace leopart
 {
 
+template <std::floating_point T>
 class Particles
 {
 public:
-  /// Initialise particles with position and the index of the cell which
-  /// contains them.
-  Particles(const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
-                               Eigen::RowMajor>& x,
-            const std::vector<int>& cells);
+  /// Initialise particles with position, the index of the containing cell
+  /// and geometric dimension of the data.
+  Particles(
+    const std::vector<T>& x, const std::vector<std::int32_t>& cells,
+    const std::size_t gdim);
+
+  // Copy constructor
+  Particles(const Particles& ptcls) = delete;
+
+  /// Move constructor
+  Particles(Particles&& ptcls) = default;
+
+  /// Destructor
+  ~Particles() = default;
 
   /// Add a field to the particles, with name and value shape
-  void add_field(std::string name, const std::vector<int>& shape);
+  void add_field(std::string name, const std::vector<std::size_t>& shape);
 
   /// List of particles in each cell
-  const std::vector<std::vector<int>>& cell_particles() const
+  const std::vector<std::vector<std::size_t>>& cell_to_particle() const
   {
-    return _cell_particles;
+    return _cell_to_particle;
+  }
+
+  /// List of unique cell assigned to enclose each particle
+  const std::vector<std::int32_t>& particle_to_cell() const
+  {
+    return _particle_to_cell;
   }
 
   /// Add a particle to a cell
   /// @return New particle index
-  int add_particle(const Eigen::VectorXd& x, int cell);
+  std::size_t add_particle(const std::span<T>& x, std::int32_t cell);
 
   /// Delete particle p in cell
   /// @note \p p is cell-local index
-  void delete_particle(int cell, int p);
-
-  /// Field access (const)
-  const Field& field(int i) const { return _fields[i]; }
-
-  /// Field access (non-const)
-  Field& field(int i) { return _fields[i]; }
+  void delete_particle(std::int32_t cell, std::size_t p);
 
   /// Access field by name (convenience)
   /// Used in Python wrapper
-  Field& field(std::string w)
+  Field<T>& field(std::string w)
   {
-    for (Field& f : _fields)
-    {
-      if (f.name == w)
-        return f;
-    }
-    throw std::out_of_range("Field not found");
+    return _fields.at(w);
   }
 
-  // Const verions for internal use
-  const Field& field(std::string w) const
+  // Const versions for internal use
+  const Field<T>& field(std::string w) const
   {
-    for (const Field& f : _fields)
-    {
-      if (f.name == w)
-        return f;
-    }
-    throw std::out_of_range("Field not found");
+    return _fields.at(w);
   }
 
 private:
   // Indices of particles in each cell.
-  std::vector<std::vector<int>> _cell_particles;
+  std::vector<std::vector<std::size_t>> _cell_to_particle;
+
+  // Incides of cells to which particles belong
+  std::vector<std::int32_t> _particle_to_cell;
 
   // List of particles which have been deleted, and available for reallocation
-  std::vector<int> _free_list;
+  std::vector<std::size_t> _free_list;
 
   // Data in fields over particles
-  std::vector<Field> _fields;
+  std::map<std::string, Field<T>> _fields;
+  const std::string _posname = "x";
 };
 } // namespace leopart

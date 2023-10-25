@@ -1,1 +1,1 @@
-add_subdirectory(quadprogpp)
+add_subdirectory(quadprog_mdspan)

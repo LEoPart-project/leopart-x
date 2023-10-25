@@ -58,21 +58,25 @@ pass the copy to the function.
 
  This software may be modified and distributed under the terms
  of the MIT license.  See the LICENSE file for details.
+
 */
 
-#ifndef _QUADPROGPP
-#define _QUADPROGPP
+// Modified 2023 to use (md)span by Nathan Sime <nsime@carnegiescience.edu>
 
-#include <Eigen/Dense>
+#pragma once
+
+#include <basix/mdspan.hpp>
 
 namespace quadprogpp
 {
 
-double solve_quadprog(Eigen::MatrixXd& G, Eigen::VectorXd& g0,
-                      const Eigen::MatrixXd& CE, const Eigen::VectorXd& ce0,
-                      const Eigen::MatrixXd& CI, const Eigen::VectorXd& ci0,
-                      Eigen::VectorXd& x);
+template <typename T>
+using mdMatrix = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+    T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
+
+double solve_quadprog(mdMatrix<double> G, std::span<double> g0,
+                      mdMatrix<const double> CE, std::span<const double> ce0,
+                      mdMatrix<const double> CI, std::span<const double> ci0,
+                      std::span<double> x);
 
 } // namespace quadprogpp
-
-#endif // #define _QUADPROGPP
