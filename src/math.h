@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <dolfinx.h>
 #include <basix/math.h>
 
 namespace leopart::math
@@ -18,7 +17,6 @@ template <typename T, std::size_t d>
 using mdspan_ct = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     const T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>>;
 
-
 template <dolfinx::scalar T>
 void transpose(mdspan_ct<T, 2> A, mdspan_t<T, 2> A_T)
 {
@@ -26,7 +24,6 @@ void transpose(mdspan_ct<T, 2> A, mdspan_t<T, 2> A_T)
     for (std::size_t j = 0; j < A_T.extent(1); ++j)
       A_T(i, j) = A(j, i);
 }
-
 
 template <dolfinx::scalar T>
 void matmult(mdspan_ct<T, 2> A, mdspan_ct<T, 2> B, mdspan_t<T, 2> C)
@@ -38,7 +35,7 @@ void matmult(mdspan_ct<T, 2> A, mdspan_ct<T, 2> B, mdspan_t<T, 2> C)
       for (std::size_t k = 0; k < A.extent(1); ++k)
         sum += A(i, k) * B(k, j);
       C(i, j) = sum;
-    }  
+    }
 }
 
 } // namespace leopart::math
