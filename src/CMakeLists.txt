@@ -8,6 +8,8 @@ cmake_minimum_required(VERSION 3.19)
 set(PROJECT_NAME leopart)
 project(${PROJECT_NAME} VERSION "0.7.0")
 
+set(PY_PROJECT_NAME pyleopart)
+
 # Get DOLFINX configuration data (DOLFINXConfig.cmake must be in
 # DOLFINX_CMAKE_CONFIG_PATH)
 if (NOT TARGET dolfinx)
@@ -28,9 +30,6 @@ endforeach()
 target_include_directories(${PROJECT_NAME} PUBLIC
                            "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>")
 
-# Set C++20 standard
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
-
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfinx)
 
@@ -42,8 +41,14 @@ include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-Wno-comment" HAVE_NO_MULTLINE)
 set_source_files_properties(particles.cpp PROPERTIES COMPILE_FLAGS "$<$<BOOL:${HAVE_NO_MULTLINE}>:-g -Wno-comment -Wall -Wextra -pedantic -Werror>")
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
-find_package(pybind11)
-pybind11_add_module(pyleopart wrapper.cpp)
-target_link_libraries(pyleopart PUBLIC dolfinx ${PROJECT_NAME})
-target_compile_features(pyleopart PRIVATE cxx_std_23)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(pybind11 CONFIG REQUIRED)
+
+pybind11_add_module(${PY_PROJECT_NAME} MODULE wrapper.cpp)
+
+# Add DOLFINx libraries.
+target_link_libraries(${PY_PROJECT_NAME} PUBLIC dolfinx ${PROJECT_NAME})
+
+# Set C++20 standard
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_compile_features(${PY_PROJECT_NAME} PRIVATE cxx_std_23)
