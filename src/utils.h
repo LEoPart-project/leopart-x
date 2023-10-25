@@ -10,7 +10,7 @@
 
 namespace leopart::utils
 {
-/// @brief Utility alias for mdpsan
+/// @brief Utility alias for frequently used mdpsan with dynamic extents
 /// @tparam T Data type
 /// @tparam d Rank
 template <typename T, std::size_t d>
