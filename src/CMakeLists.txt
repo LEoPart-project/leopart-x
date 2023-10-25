@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.19)
 set(PROJECT_NAME leopart)
 project(${PROJECT_NAME} VERSION "0.7.0")
 
-set(PY_PROJECT_NAME pyleopart)
+set(PY_PROJECT_NAME cpp)
 
 # Get DOLFINX configuration data (DOLFINXConfig.cmake must be in
 # DOLFINX_CMAKE_CONFIG_PATH)

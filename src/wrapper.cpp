@@ -27,7 +27,7 @@ using dtype = double;      // Particle dtype
 using dtype_geom = double; // Geometry dtype
 
 
-PYBIND11_MODULE(pyleopart, m)
+PYBIND11_MODULE(cpp, m)
 {
   // Class Field
   py::class_<Field<dtype>>(m, "Field")

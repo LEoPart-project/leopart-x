@@ -83,8 +83,8 @@ setup(
     description="LEoPart Python interface",
     long_description="",
     packages=["leopart"],
-    package_data={"dolfinx.wrappers": ["*.h"]},
-    ext_modules=[CMakeExtension("pyleopart")],
+    package_data={},
+    ext_modules=[CMakeExtension("leopart.cpp")],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
 )

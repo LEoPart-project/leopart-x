@@ -1,6 +1,6 @@
 
 import numpy as np
-import pyleopart
+import leopart.cpp as pyleopart
 import pytest
 
 
