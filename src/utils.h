@@ -10,6 +10,12 @@
 
 namespace leopart::utils
 {
+/// @brief Utility alias for mdpsan
+/// @tparam T Data type
+/// @tparam d Rank
+template <typename T, std::size_t d>
+using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+    T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>>;
 
 /// Format and print 
 /// @param[in] span Rank 2 mdspan to format and print.
@@ -120,9 +126,9 @@ evaluate_basis_functions(const dolfinx::fem::FunctionSpace<U>& V,
     cell_info = std::span(mesh->topology()->get_cell_permutation_info());
   }
 
-  using cmdspan4_t = leopart::math::mdspan_ct<U, 4>;
-  using mdspan2_t = leopart::math::mdspan_t<U, 2>;
-  using mdspan3_t = leopart::math::mdspan_t<U, 3>;
+  using cmdspan4_t = mdspan_t<const U, 4>;
+  using mdspan2_t = mdspan_t<U, 2>;
+  using mdspan3_t = mdspan_t<U, 3>;
 
   // Create buffer for coordinate dofs and point in physical space
   std::vector<U> coord_dofs_b(num_dofs_g * gdim);
@@ -238,10 +244,10 @@ evaluate_basis_functions(const dolfinx::fem::FunctionSpace<U>& V,
   std::vector<U> basis_valuesb(num_basis_values);
   mdspan2_t basis_values(basis_valuesb.data(), basis_shape[2], basis_shape[3]);
 
-  using xu_t = leopart::math::mdspan_t<U, 2>;
-  using xU_t = leopart::math::mdspan_ct<U, 2>;
-  using xJ_t = leopart::math::mdspan_ct<U, 2>;
-  using xK_t = leopart::math::mdspan_ct<U, 2>;
+  using xu_t = mdspan_t<U, 2>;
+  using xU_t = mdspan_t<const U, 2>;
+  using xJ_t = mdspan_t<const U, 2>;
+  using xK_t = mdspan_t<const U, 2>;
   auto push_forward_fn
       = element->basix_element().template map_fn<xu_t, xU_t, xJ_t, xK_t>();
 

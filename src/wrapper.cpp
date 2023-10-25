@@ -6,7 +6,6 @@
 #include "Field.h"
 #include "Particles.h"
 #include "generation.h"
-#include "project/l2project.h"
 #include "transfer.h"
 
 #include <cstddef>
@@ -15,7 +14,6 @@
 #include <tuple>
 #include <dolfinx.h>
 #include <memory>
-// #include <pybind11/eigen.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -24,7 +22,6 @@ namespace py = pybind11;
 
 using leopart::Field;
 using leopart::Particles;
-// using leopart::project::L2Project;
 
 using dtype = double;      // Particle dtype
 using dtype_geom = double; // Geometry dtype
@@ -32,6 +29,7 @@ using dtype_geom = double; // Geometry dtype
 
 PYBIND11_MODULE(pyleopart, m)
 {
+  // Class Field
   py::class_<Field<dtype>>(m, "Field")
       .def("data",
           [](Field<dtype>& self, int p)
@@ -52,6 +50,7 @@ PYBIND11_MODULE(pyleopart, m)
       .def_readonly("name", &Field<dtype>::Field::name)
       .def("resize", &Field<dtype>::resize);
 
+  // Class Particles
   py::class_<Particles<dtype>>(m, "Particles")
       .def(py::init<std::vector<dtype>&, const std::vector<std::int32_t>&,
            const std::size_t>())
@@ -80,17 +79,6 @@ PYBIND11_MODULE(pyleopart, m)
       .def("particle_to_cell",
            py::overload_cast<>(&Particles<dtype>::Particles::particle_to_cell,
                                py::const_));;
-
-  // // Projection classes
-  // py::class_<L2Project>(m, "L2Project")
-  //     .def(py::init<Particles&,
-  //                   std::shared_ptr<dolfinx::function::Function<PetscScalar>>,
-  //                   std::string>())
-  //     .def("solve", py::overload_cast<>(&L2Project::L2Project::solve),
-  //          "l2 projection")
-  //     .def("solve",
-  //          py::overload_cast<double, double>(&L2Project::L2Project::solve),
-  //          "Bounded l2 projection");
 
   // Generation functions
   m.def("random_reference_tetrahedron",

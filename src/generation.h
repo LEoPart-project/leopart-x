@@ -68,7 +68,7 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
   std::vector<T> coords(Xshape[0] * Xshape[1], 0);
 
   using mdspan2_t = leopart::math::mdspan_t<T, 2>;
-  using cmdspan4_t = leopart::math::mdspan_ct<T, 4>;
+  using cmdspan4_t = leopart::math::mdspan_t<const T, 4>;
 
   // Loop over cells and tabulate dofs
   std::vector<T> x_b(Xshape[0] * Xshape[1]);

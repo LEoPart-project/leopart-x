@@ -18,8 +18,7 @@
 
 namespace leopart::transfer
 {
-using leopart::math::mdspan_ct;
-using leopart::math::mdspan_t;
+using leopart::utils::mdspan_t;
 
 /// Transfer information from the FE \p field to the particles by
 /// interpolating the finite element function at particles' positions.
@@ -98,7 +97,7 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
   const auto [basis_evals, basis_shape]
       = leopart::utils::evaluate_basis_functions<T>(
           *f->function_space(), pax.field("x").data(), pax.particle_to_cell());
-  const mdspan_ct<T, 3> basis_evals_md(basis_evals.data(), basis_shape);
+  const mdspan_t<const T, 3> basis_evals_md(basis_evals.data(), basis_shape);
 
   // Assemble and solve Q^T Q u = Q^T L in each cell, where
   // Q = \phi(x_p), Q^T = \psi(x_p), L = u_p,
@@ -140,7 +139,7 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
     leopart::math::matmult<T>(Q_T, L, QT_L);
 
     const std::vector<T> soln = basix::math::solve<T>(QT_Q, QT_L);
-    mdspan_ct<T, 2> soln_md(soln.data(), soln.size(), 1);
+    mdspan_t<const T, 2> soln_md(soln.data(), soln.size(), 1);
 
     auto dofs = dm->cell_dofs(c);
     for (int i = 0; i < dofs.size(); ++i)
@@ -192,7 +191,7 @@ void transfer_to_function_constrained(
   const auto [basis_evals, basis_shape]
       = leopart::utils::evaluate_basis_functions<T>(
           *f->function_space(), pax.field("x").data(), pax.particle_to_cell());
-  const mdspan_ct<T, 3> basis_evals_md(basis_evals.data(), basis_shape);
+  const mdspan_t<const T, 3> basis_evals_md(basis_evals.data(), basis_shape);
 
   // QuadProg specifics for constraints
   // CE^T x + ce0 =  0
