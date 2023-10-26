@@ -141,7 +141,7 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
     const std::vector<T> soln = basix::math::solve<T>(QT_Q, QT_L);
     mdspan_t<const T, 2> soln_md(soln.data(), soln.size(), 1);
 
-    auto dofs = dm->cell_dofs(c);
+    const auto& dofs = dm->cell_dofs(c);
     for (int i = 0; i < dofs.size(); ++i)
       expansion_coefficients[dofs[i]] = soln[i];
   }
@@ -257,7 +257,7 @@ void transfer_to_function_constrained(
     std::vector<T> x(QT_Q.extent(1), 0.0);
     quadprogpp::solve_quadprog(G, g0, CE, ce0, CI, ci0, x);
 
-    auto dofs = dm->cell_dofs(c);
+    const auto& dofs = dm->cell_dofs(c);
     for (int i = 0; i < dofs.size(); ++i)
       expansion_coefficients[dofs[i]] = x[i];
   }

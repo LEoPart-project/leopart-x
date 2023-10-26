@@ -119,7 +119,7 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
     p_cells.insert(p_cells.end(), npcells.begin(), npcells.end());
   }
 
-  return {xp_all, p_cells};
+  return {std::move(xp_all), std::move(p_cells)};
 }
 
 /// Create a set of n points at random positions within the cell.
@@ -259,6 +259,46 @@ std::vector<T> random_reference_cube(
 
   std::generate(p.begin(), p.end(), [&dist, &rgen]() { return dist(rgen); });
   return p;
+}
+
+/// Create a set of points located at the DoF coordinates of a
+/// function space in every cell.
+///
+/// @note Coordinates may overlap.
+///
+/// @tparam T Function space geometry data type
+/// @param V Function space DoF coordinates to generate
+///
+/// @return Array of \f(\mathbb{R}^d\f)-coordinates
+template<std::floating_point T>
+std::tuple<std::vector<T>, std::vector<std::int32_t>>
+generate_at_dof_coords(const dolfinx::fem::FunctionSpace<T>& V)
+{
+  const std::vector<T> dof_coords = V.tabulate_dof_coordinates(false);
+  const std::size_t tdim = V.mesh()->topology()->dim();
+  const std::size_t n_cells = V.mesh()->topology()->index_map(tdim)->size_local();
+  const std::size_t gdim = 3;
+
+  // Assumed single cell type
+  const std::size_t ndof_per_cell = V.dofmap()->cell_dofs(0).size();
+  std::vector<T> px(n_cells * ndof_per_cell * gdim, 0.0);
+  std::vector<std::int32_t> p_to_cells(n_cells * ndof_per_cell, 0);
+
+  for (std::size_t c = 0; c < n_cells; ++c)
+  {
+    std::size_t dof_offset = 0;
+    for (const auto& dof : V.dofmap()->cell_dofs(c))
+    {
+      const std::span<const T> dof_x(dof_coords.begin() + dof * gdim, gdim);
+      std::copy(dof_x.begin(), dof_x.end(),
+       px.begin() + c * ndof_per_cell * gdim + dof_offset * gdim);
+      ++dof_offset;
+    }
+
+    std::fill_n(p_to_cells.begin() + c * ndof_per_cell, ndof_per_cell, c);
+  }
+
+  return {std::move(px), std::move(p_to_cells)};
 }
 
 } // namespace generation
