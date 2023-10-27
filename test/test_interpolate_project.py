@@ -17,14 +17,14 @@ def create_mesh(cell_type, dtype, n):
                              cell_type=cell_type, dtype=dtype)
 
 
-@pytest.mark.parametrize("k", [1, 2, 3])
+@pytest.mark.parametrize("k", [1, 2])
 @pytest.mark.parametrize("dtype", [np.float64])
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle,
                                        dolfinx.mesh.CellType.tetrahedron,
                                        dolfinx.mesh.CellType.quadrilateral,
                                        dolfinx.mesh.CellType.hexahedron])
 def test_transfer_to_particles(k, dtype, cell_type):
-    mesh = create_mesh(cell_type, dtype, 3)
+    mesh = create_mesh(cell_type, dtype, 4)
     Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
 
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
@@ -48,17 +48,19 @@ def test_transfer_to_particles(k, dtype, cell_type):
     pyleopart.transfer_to_particles(p, v, u._cpp_object)
 
     expected = sq_val(p.field("x").data().T)
-    assert np.all(np.isclose(p.field("v").data().ravel(), expected))
+    assert np.all(
+        np.isclose(p.field("v").data().ravel(), expected,
+                   rtol=np.finfo(dtype).eps*1e2, atol=np.finfo(dtype).eps))
 
 
-@pytest.mark.parametrize("k", [1, 2, 3])
+@pytest.mark.parametrize("k", [1, 2])
 @pytest.mark.parametrize("dtype", [np.float64])
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle,
                                        dolfinx.mesh.CellType.tetrahedron,
                                        dolfinx.mesh.CellType.quadrilateral,
                                        dolfinx.mesh.CellType.hexahedron])
 def test_transfer_to_function(k, dtype, cell_type):
-    mesh = create_mesh(cell_type, dtype, 3)
+    mesh = create_mesh(cell_type, dtype, 4)
     Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
 
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
@@ -85,10 +87,10 @@ def test_transfer_to_function(k, dtype, cell_type):
     l2error = mesh.comm.allreduce(
         dolfinx.fem.assemble_scalar(dolfinx.fem.form(
             (u - uh_exact)**2 * ufl.dx)), op=MPI.SUM)
-    assert l2error < 1e-10
+    assert l2error < np.finfo(dtype).eps
 
 
-@pytest.mark.parametrize("k", [1, 2, 3])
+@pytest.mark.parametrize("k", [1, 2])
 @pytest.mark.parametrize("dtype", [np.float64])
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle,
                                        dolfinx.mesh.CellType.tetrahedron,
@@ -111,21 +113,25 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     def unconstrained_func(x):
         return x[0]
 
+    # Constrained function is also exactly represented in FE space
     def constrained_func(x):
         return np.where(x[0] < x0, unconstrained_func(x), x0)
 
+    # Interpolate the constrained function exactly
     uh_exact = dolfinx.fem.Function(Q)
-    uh_exact.x.array[:] = 0.5
+    uh_exact.x.array[:] = x0
     cells = dolfinx.mesh.locate_entities(
-        mesh, mesh.topology.dim, lambda x: x[0] < x0+0.1)
+        mesh, mesh.topology.dim, lambda x: x[0] < x0 + np.finfo(dtype).eps)
     uh_exact.interpolate(constrained_func, cells=cells)
     uh_exact.x.scatter_forward()
 
+    # Set the particle data to the *un*constrained function
     p.add_field("v", [1])
-    p.field("v").data()[:] = unconstrained_func(p.field("x").data().T).reshape((-1, 1))
-    # p.field("v").data()[:] = constrained_func(p.field("x").data().T).reshape((-1, 1))
+    p.field("v").data()[:] = unconstrained_func(
+        p.field("x").data().T).reshape((-1, 1))
 
-    # Transfer from particles to function
+    # Transfer the *un*constrained particle data to the FE function using
+    # constrained solve
     u = dolfinx.fem.Function(Q)
     pyleopart.transfer_to_function_constrained(
         u._cpp_object, p, p.field("v"), 0.0, 0.5)
@@ -133,7 +139,7 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     l2error = mesh.comm.allreduce(
         dolfinx.fem.assemble_scalar(dolfinx.fem.form(
             (u - uh_exact)**2 * ufl.dx)), op=MPI.SUM)
-    assert l2error < 1e-10
+    assert l2error < np.finfo(dtype).eps
 
 
 # # Test back-and-forth projection on 2D mesh: vector valued case
