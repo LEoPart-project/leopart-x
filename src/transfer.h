@@ -49,18 +49,19 @@ void transfer_to_particles(const Particles<T>& pax, Field<T>& field,
   f->eval(x, xshape, p2c, u, ushape);
 }
 
+
 /// Transfer the provided particle field data to the finite element
-/// function using local l_2 projection.
-/// We solve the problem: find \f(u_h \in V\f) such that
+/// function using local l_2 projection. The solve_callback function
+/// returns \f(x\f) which solves (as required by the user)
 ///
 /// \f[
-///    u_h(x_p) v(x_p) = u_p v(x_p) \quad \forall v \in V, \; p = 1,\ldots,n_p.
+///    Q^T Q x = Q^T L.
 /// \f]
 ///
-/// Here \f(u_p\f) is the \f(p\f)th particle's data, \f(u_p\f) is the \f(p\f)th
-/// particle's position, \f(n_p\f) is the total number of particles
-/// and \f(V\f) is the function space to which the provided finite element
-/// function belongs.
+/// where \f(Q = u_h(x_p)\f), \f(Q^T = v(x_p)\f) \f(L = u_p\f),
+/// \f(u_p\f) is the \f(p\f)th particle's data, \f(x_p\f) is the \f(p\f)th
+/// particle's position.
+///
 ///
 /// @tparam T The function scalar type
 /// @tparam U The function geometry type
@@ -68,8 +69,10 @@ void transfer_to_particles(const Particles<T>& pax, Field<T>& field,
 /// @param pax The particles collection
 /// @param field The field data to be transferred
 template <dolfinx::scalar T, std::floating_point U>
-void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
-                          const Particles<T>& pax, const Field<T>& field)
+void transfer_to_function_l2_callback(
+  std::shared_ptr<dolfinx::fem::Function<T>> f,
+  const Particles<T>& pax, const Field<T>& field,
+  std::function<const std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)> solve_callback)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<U>> mesh
       = f->function_space()->mesh();
@@ -81,6 +84,9 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
   std::shared_ptr<const dolfinx::fem::FiniteElement<T>> element
       = f->function_space()->element();
   assert(element);
+
+  // @todo these definitions are legacy DOLFIN and should be refactored for
+  // appropriate unrolling of DoFs.
   const int block_size = element->block_size();
   const int value_size = element->value_size() / block_size;
   const int space_dimension = element->space_dimension() / block_size;
@@ -103,11 +109,18 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
   // Q = \phi(x_p), Q^T = \psi(x_p), L = u_p,
   // \phi is the trial function, \psi is the test function, x_p
   // are particles' position and u_p are particles' datum/data.
+  // Dimensions:
+  //  Q: (n_p x space_dimension)
+  //  QT: (space_dimension x n_p)
+  //  QT . Q: (space_dimension x space_dimension)
+  //  L: (n_p x block_size)
+  //  QT . L: (space_dimension x block_size)
   for (int c = 0; c < ncells; ++c)
   {
     const std::vector<std::size_t> cell_particles = cell_to_particle[c];
     int cell_np = cell_particles.size();
 
+    // Assemble Q
     std::vector<T> Q_T_data(cell_np * space_dimension);
     mdspan_t<T, 2> Q_T(Q_T_data.data(), space_dimension, cell_np);
 
@@ -116,20 +129,22 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
     for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
     {
       const std::size_t p_idx = cell_particles[cell_p];
-      for (std::size_t i = 0; i < space_dimension; ++i)
-        Q(cell_p, i) = basis_evals_md(p_idx, i, 0); // Assume shape 1 for now
+      for (int i = 0; i < space_dimension; ++i)
+        Q(cell_p, i) = basis_evals_md(p_idx, i, 0); // Assume no vector valued basis
     }
     leopart::math::transpose<T>(Q, Q_T);
 
+    // Assemble L. Each column corresponds to a block's DoFs
     std::vector<T> L_data(cell_np * block_size);
     mdspan_t<T, 2> L(L_data.data(), cell_np, block_size);
     for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
     {
       const std::size_t p_idx = cell_particles[cell_p];
-      for (std::size_t b = 0; b < block_size; ++b)
-        L(cell_p, b) = field.data()[p_idx + b];
+      for (int b = 0; b < block_size; ++b)
+        L(cell_p, b) = field.data()[p_idx * block_size + b];
     }
 
+    // Solve element local l2 minimisation. Solve for each column in L.
     std::vector<T> QT_Q_data(Q_T.extent(0) * Q.extent(1));
     mdspan_t<T, 2> QT_Q(QT_Q_data.data(), Q_T.extent(0), Q.extent(1));
     leopart::math::matmult<T>(Q_T, Q, QT_Q);
@@ -138,13 +153,45 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
     mdspan_t<T, 2> QT_L(QT_L_data.data(), Q_T.extent(0), L.extent(1));
     leopart::math::matmult<T>(Q_T, L, QT_L);
 
-    const std::vector<T> soln = basix::math::solve<T>(QT_Q, QT_L);
-    mdspan_t<const T, 2> soln_md(soln.data(), soln.size(), 1);
+    const std::vector<T> soln = solve_callback(QT_Q, QT_L);
 
-    auto dofs = dm->cell_dofs(c);
+    // Populate FE function DoFs
+    const auto& dofs = dm->cell_dofs(c);
     for (int i = 0; i < dofs.size(); ++i)
-      expansion_coefficients[dofs[i]] = soln[i];
+      for (int k = 0; k < block_size; ++k)
+        expansion_coefficients[dofs[i]*block_size + k] = soln[i*block_size + k];
   }
+}
+
+/// Transfer the provided particle field data to the finite element
+/// function using local l_2 projection.
+/// We solve the problem: find \f(u_h \in V\f) such that
+///
+/// \f[
+///    u_h(x_p) v(x_p) = u_p v(x_p) \quad \forall v \in V, \; p = 1,\ldots,n_p.
+/// \f]
+///
+/// Here \f(u_p\f) is the \f(p\f)th particle's data, \f(x_p\f) is the \f(p\f)th
+/// particle's position, \f(n_p\f) is the total number of particles
+/// and \f(V\f) is the function space to which the provided finite element
+/// function belongs.
+///
+/// @tparam T The function scalar type
+/// @tparam U The function geometry type
+/// @param f The finite element function
+/// @param pax The particles collection
+/// @param field The field data to be transferred
+template <dolfinx::scalar T, std::floating_point U>
+void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
+                          const Particles<T>& pax, const Field<T>& field)
+{
+  std::function<const std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)>
+   solve_function = [](mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
+  {
+    const std::vector<T> soln = basix::math::solve<T>(QT_Q, QT_L);
+    return soln;
+  };
+  transfer_to_function_l2_callback<T, U>(f, pax, field, solve_function);
 }
 
 /// Transfer the provided particle field data to the finite element
@@ -165,12 +212,6 @@ void transfer_to_function_constrained(
     std::shared_ptr<dolfinx::fem::Function<T>> f, const Particles<T>& pax,
     const Field<T>& field, const T l, const T u)
 {
-  std::shared_ptr<const dolfinx::mesh::Mesh<U>> mesh
-      = f->function_space()->mesh();
-  const int tdim = mesh->topology()->dim();
-  std::int32_t ncells = mesh->topology()->index_map(tdim)->size_local();
-
-  // Get element
   assert(f->function_space()->element());
   std::shared_ptr<const dolfinx::fem::FiniteElement<T>> element
       = f->function_space()->element();
@@ -178,20 +219,6 @@ void transfer_to_function_constrained(
   const int block_size = element->block_size();
   const int value_size = element->value_size() / block_size;
   const int space_dimension = element->space_dimension() / block_size;
-
-  std::shared_ptr<const dolfinx::fem::DofMap> dm
-      = f->function_space()->dofmap();
-
-  // Vector of expansion_coefficients to be set
-  std::span<T> expansion_coefficients = f->x()->mutable_array();
-  const std::vector<std::vector<std::size_t>>& cell_to_particle
-      = pax.cell_to_particle();
-
-  // Basis evaluations, shape (np, space_dimension, value_size)
-  const auto [basis_evals, basis_shape]
-      = leopart::utils::evaluate_basis_functions<T>(
-          *f->function_space(), pax.field("x").data(), pax.particle_to_cell());
-  const mdspan_t<const T, 3> basis_evals_md(basis_evals.data(), basis_shape);
 
   // QuadProg specifics for constraints
   // CE^T x + ce0 =  0
@@ -211,56 +238,18 @@ void transfer_to_function_constrained(
     ci0[i + space_dimension] = u;
   }
 
-  // Assemble and solve Q^T Q u = Q^T L in each cell, where
-  // Q = \phi(x_p), Q^T = \psi(x_p), L = u_p,
-  // \phi is the trial function, \psi is the test function, x_p
-  // are particles' position and u_p are particles' datum/data.
-  for (int c = 0; c < ncells; ++c)
+  std::function<std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)>
+    solve_function = [&CE, &ce0, &CI, &ci0](
+      mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
   {
-    const std::vector<std::size_t> cell_particles = cell_to_particle[c];
-    int cell_np = cell_particles.size();
-
-    std::vector<T> Q_T_data(cell_np * space_dimension);
-    mdspan_t<T, 2> Q_T(Q_T_data.data(), space_dimension, cell_np);
-
-    std::vector<T> Q_data(cell_np * space_dimension);
-    mdspan_t<T, 2> Q(Q_data.data(), cell_np, space_dimension);
-    for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
-    {
-      const std::size_t p_idx = cell_particles[cell_p];
-      for (std::size_t i = 0; i < space_dimension; ++i)
-        Q(cell_p, i) = basis_evals_md(p_idx, i, 0); // Assume shape 1 for now
-    }
-    leopart::math::transpose<T>(Q, Q_T);
-
-    std::vector<T> L_data(cell_np * block_size);
-    mdspan_t<T, 2> L(L_data.data(), cell_np, block_size);
-    for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
-    {
-      const std::size_t p_idx = cell_particles[cell_p];
-      for (std::size_t b = 0; b < block_size; ++b)
-        L(cell_p, b) = field.data()[p_idx + b];
-    }
-
-    std::vector<T> QT_Q_data(Q_T.extent(0) * Q.extent(1));
-    mdspan_t<T, 2> QT_Q(QT_Q_data.data(), Q_T.extent(0), Q.extent(1));
-    leopart::math::matmult<T>(Q_T, Q, QT_Q);
-
-    std::vector<T> QT_L_data(Q_T.extent(0) * L.extent(1));
-    mdspan_t<T, 2> QT_L(QT_L_data.data(), Q_T.extent(0), L.extent(1));
-    leopart::math::matmult<T>(Q_T, L, QT_L);
-
-    quadprogpp::mdMatrix<T> G(QT_Q_data.data(), QT_Q.extent(0), QT_Q.extent(1));
-    for (auto& v : QT_L_data)
+    std::span<T> g0(QT_L.data_handle(), QT_L.extent(0));
+    for (auto& v : g0)
       v *= -1.0;
-    std::vector<T>& g0 = QT_L_data; //.data(), QT_L.extent(0));
     std::vector<T> x(QT_Q.extent(1), 0.0);
-    quadprogpp::solve_quadprog(G, g0, CE, ce0, CI, ci0, x);
+    quadprogpp::solve_quadprog(QT_Q, g0, CE, ce0, CI, ci0, x);
+    return x;
+  };
 
-    auto dofs = dm->cell_dofs(c);
-    for (int i = 0; i < dofs.size(); ++i)
-      expansion_coefficients[dofs[i]] = x[i];
-  }
+  transfer_to_function_l2_callback<T, U>(f, pax, field, solve_function);
 }
-
 } // namespace leopart::transfer

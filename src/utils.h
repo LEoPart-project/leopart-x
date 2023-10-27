@@ -33,6 +33,16 @@ void print_mdspan(
   std::cout << msg << std::endl;
 };
 
+/// Format and print 
+void print_iterable(
+  const auto span, const std::string prefix = "")
+{
+  std::string msg = prefix + ":\n";
+  for (const auto& item: span)
+    msg += std::to_string(item) + ", ";
+  std::cout << msg << std::endl;
+};
+
 
 /// Adapted from dolfinx_mpc::utils::evaluate_basis_functions
 /// originally authored by Jorgen S. Dokken

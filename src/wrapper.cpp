@@ -106,6 +106,15 @@ PYBIND11_MODULE(cpp, m)
             py::array_t<dtype>(shape, xp_all.data()), std::move(np_cells));
           return ret_val;
         }, py::return_value_policy::move);
+  m.def("generate_at_dof_coords",
+        [](std::shared_ptr<dolfinx::fem::FunctionSpace<dtype_geom>> V) {
+          auto [xp_all, np_cells] = leopart::generation::generate_at_dof_coords(*V);
+          const std::size_t gdim = 3;
+          std::array<std::size_t, 2> shape = {xp_all.size() / gdim, gdim};
+          auto ret_val = std::make_tuple<py::array_t<dtype>, std::vector<std::int32_t>>(
+            py::array_t<dtype>(shape, xp_all.data()), std::move(np_cells));
+          return ret_val;
+        }, py::return_value_policy::move);
 
   // Transfer functions
   m.def("transfer_to_particles", &leopart::transfer::transfer_to_particles<dtype>);
