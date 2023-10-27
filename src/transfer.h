@@ -109,6 +109,12 @@ void transfer_to_function_l2_callback(
   // Q = \phi(x_p), Q^T = \psi(x_p), L = u_p,
   // \phi is the trial function, \psi is the test function, x_p
   // are particles' position and u_p are particles' datum/data.
+  // Dimensions:
+  //  Q: (n_p x space_dimension)
+  //  QT: (space_dimension x n_p)
+  //  QT . Q: (space_dimension x space_dimension)
+  //  L: (n_p x block_size)
+  //  QT . L: (space_dimension x block_size)
   for (int c = 0; c < ncells; ++c)
   {
     const std::vector<std::size_t> cell_particles = cell_to_particle[c];
@@ -179,8 +185,8 @@ template <dolfinx::scalar T, std::floating_point U>
 void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
                           const Particles<T>& pax, const Field<T>& field)
 {
-  std::function<std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)> solve_function
-    = [](mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
+  std::function<const std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)>
+   solve_function = [](mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
   {
     const std::vector<T> soln = basix::math::solve<T>(QT_Q, QT_L);
     return soln;
@@ -232,13 +238,13 @@ void transfer_to_function_constrained(
     ci0[i + space_dimension] = u;
   }
 
-  std::function<std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)> solve_function
-    = [&CE, &ce0, &CI, &ci0]
-    (mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
+  std::function<std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)>
+    solve_function = [&CE, &ce0, &CI, &ci0](
+      mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
   {
-    for (auto& v : std::span<T>(QT_L.data_handle(), QT_L.extent(0)))
-      v *= -1.0;
     std::span<T> g0(QT_L.data_handle(), QT_L.extent(0));
+    for (auto& v : g0)
+      v *= -1.0;
     std::vector<T> x(QT_Q.extent(1), 0.0);
     quadprogpp::solve_quadprog(QT_Q, g0, CE, ce0, CI, ci0, x);
     return x;
