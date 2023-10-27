@@ -36,7 +36,7 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
 
     # Function is exactly represented in FE space
     def sq_val(x):
-        return np.stack([x[0] ** k] * shape[0])
+        return np.stack([x[i] ** k for i in range(shape[0])])
 
     u = dolfinx.fem.Function(Q)
     u.interpolate(sq_val)
@@ -73,7 +73,7 @@ def test_transfer_to_function(k, dtype, cell_type, shape):
 
     # Function is exactly represented in FE space
     def sq_val(x):
-        return np.stack([x[0] ** k] * shape[0])
+        return np.stack([x[i] ** k for i in range(shape[0])])
 
     uh_exact = dolfinx.fem.Function(Q)
     uh_exact.interpolate(sq_val)
