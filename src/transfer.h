@@ -81,6 +81,9 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
   std::shared_ptr<const dolfinx::fem::FiniteElement<T>> element
       = f->function_space()->element();
   assert(element);
+
+  // @todo these definitions are legacy DOLFIN and should be refactored for
+  // appropriate unrolling of DoFs.
   const int block_size = element->block_size();
   const int value_size = element->value_size() / block_size;
   const int space_dimension = element->space_dimension() / block_size;
@@ -108,6 +111,7 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
     const std::vector<std::size_t> cell_particles = cell_to_particle[c];
     int cell_np = cell_particles.size();
 
+    // Assemble Q
     std::vector<T> Q_T_data(cell_np * space_dimension);
     mdspan_t<T, 2> Q_T(Q_T_data.data(), space_dimension, cell_np);
 
@@ -116,20 +120,22 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
     for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
     {
       const std::size_t p_idx = cell_particles[cell_p];
-      for (std::size_t i = 0; i < space_dimension; ++i)
-        Q(cell_p, i) = basis_evals_md(p_idx, i, 0); // Assume shape 1 for now
+      for (int i = 0; i < space_dimension; ++i)
+        Q(cell_p, i) = basis_evals_md(p_idx, i, 0); // Assume no vector valued basis
     }
     leopart::math::transpose<T>(Q, Q_T);
 
+    // Assemble L. Each column corresponds to a block's DoFs
     std::vector<T> L_data(cell_np * block_size);
     mdspan_t<T, 2> L(L_data.data(), cell_np, block_size);
     for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
     {
       const std::size_t p_idx = cell_particles[cell_p];
-      for (std::size_t b = 0; b < block_size; ++b)
-        L(cell_p, b) = field.data()[p_idx + b];
+      for (int b = 0; b < block_size; ++b)
+        L(cell_p, b) = field.data()[p_idx * block_size + b];
     }
 
+    // Solve element local l2 minimisation. Solve for each column in L.
     std::vector<T> QT_Q_data(Q_T.extent(0) * Q.extent(1));
     mdspan_t<T, 2> QT_Q(QT_Q_data.data(), Q_T.extent(0), Q.extent(1));
     leopart::math::matmult<T>(Q_T, Q, QT_Q);
@@ -139,11 +145,12 @@ void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
     leopart::math::matmult<T>(Q_T, L, QT_L);
 
     const std::vector<T> soln = basix::math::solve<T>(QT_Q, QT_L);
-    mdspan_t<const T, 2> soln_md(soln.data(), soln.size(), 1);
 
+    // Populate FE function DoFs
     const auto& dofs = dm->cell_dofs(c);
     for (int i = 0; i < dofs.size(); ++i)
-      expansion_coefficients[dofs[i]] = soln[i];
+      for (int k = 0; k < block_size; ++k)
+        expansion_coefficients[dofs[i]*block_size + k] = soln[i*block_size + k];
   }
 }
 
