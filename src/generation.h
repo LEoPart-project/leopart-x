@@ -34,13 +34,12 @@ namespace generation
 {
 
 /// Create a set of points, distributed pro rata to the cell volumes.
-/// The total number of particles will approximately equal \p density particles.
 ///
 /// @todo `dolfinx::fem::CoordinateElement::tabulate` performance is too slow
 /// to generate a uniquely random set of points in each cell
 ///
 /// @tparam T Position data type
-/// @param[in] n Number of particles
+/// @param[in] np_per_cell Number of particles per cell
 /// @param[in] dim Spatial dimension
 ///
 /// @return tuple with point coordinates, cell indices
