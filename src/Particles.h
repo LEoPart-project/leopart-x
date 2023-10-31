@@ -81,5 +81,6 @@ private:
   // Data in fields over particles
   std::map<std::string, Field<T>> _fields;
   const std::string _posname = "x";
+  const std::int32_t INVALID_CELL = -1;
 };
 } // namespace leopart

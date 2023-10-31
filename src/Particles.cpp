@@ -46,6 +46,7 @@ std::size_t Particles<T>::add_particle(
     // Resize all fields
     for (auto& [f_name, f] : _fields)
       f.resize(f.size() + 1);
+    _particle_to_cell.resize(_particle_to_cell.size() + 1);
   }
   else
   {
@@ -54,8 +55,7 @@ std::size_t Particles<T>::add_particle(
   }
 
   _cell_to_particle[cell].push_back(pidx);
-  // TODO: remove excessive dynamic allocation
-  _particle_to_cell.insert(_particle_to_cell.begin() + pidx, cell);
+  _particle_to_cell[pidx] = cell;
   _fields.at(_posname).data(pidx) = x;
   return pidx;
 }
@@ -70,9 +70,8 @@ void Particles<T>::delete_particle(std::int32_t cell, std::size_t p_local)
   std::size_t pidx = cp[p_local];
   cp.erase(cp.begin() + p_local);
 
-  // delete particle to cell entry. TODO: can we keep this memory?
   assert(pidx < _particle_to_cell.size());
-  _particle_to_cell.erase(_particle_to_cell.begin() + pidx);
+  _particle_to_cell[pidx] = INVALID_CELL;
 
   _free_list.push_back(pidx);
 }
