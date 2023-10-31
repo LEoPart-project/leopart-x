@@ -1,4 +1,3 @@
-
 import numpy as np
 import leopart.cpp as pyleopart
 import pytest
@@ -30,21 +29,27 @@ def test_add_field():
 
 def test_add_delete_particles():
     n = 20
-    x = np.random.rand(n, 3)
-    p = pyleopart.Particles(x, list(range(n)))
-    x = np.random.rand(3)
+    dim = 3
+    x = np.arange(n * dim, dtype=np.float64).reshape((-1, dim))
+    x2c = np.arange(x.shape[0], dtype=np.int32)
+    p = pyleopart.Particles(x, x2c)
     
     # Add to cell 12
-    p.add_particle(x, 12)
+    x = np.random.rand(3)
+    new_pidx = p.add_particle(x, 12)
+    assert new_pidx == n
     c2p = p.cell_to_particle()
-    assert(len(c2p[12]) == 2)
+    assert len(c2p[12]) == 2
+    assert np.all(c2p[12] == np.array([12, new_pidx]))
 
-    # Delete from cell 1
+    # Delete from cell 0
     p.delete_particle(0, 0)
     c2p = p.cell_to_particle()
-    assert(len(c2p[0]) == 0)
+    assert len(c2p[0]) == 0
 
-    # Add to cell 0
-    p.add_particle(x, 1)
+    # Add to cell 1
+    new_pidx = p.add_particle(x, 1)
+    assert new_pidx == 0
     c2p = p.cell_to_particle()
-    assert(c2p[1][1] == 0)
+    assert c2p[1][1] == 0
+    assert np.all(c2p[1] == np.array([1, new_pidx]))
