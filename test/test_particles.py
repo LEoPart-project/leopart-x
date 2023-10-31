@@ -37,6 +37,7 @@ def test_add_delete_particles():
     # Add to cell 12
     x = np.random.rand(3)
     new_pidx = p.add_particle(x, 12)
+    assert len(p.particle_to_cell()) == n + 1
     assert new_pidx == n
     c2p = p.cell_to_particle()
     assert len(c2p[12]) == 2
@@ -45,10 +46,12 @@ def test_add_delete_particles():
     # Delete from cell 0
     p.delete_particle(0, 0)
     c2p = p.cell_to_particle()
+    assert len(p.particle_to_cell()) == n + 1
     assert len(c2p[0]) == 0
 
     # Add to cell 1
     new_pidx = p.add_particle(x, 1)
+    assert len(p.particle_to_cell()) == n + 1
     assert new_pidx == 0
     c2p = p.cell_to_particle()
     assert c2p[1][1] == 0
