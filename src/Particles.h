@@ -53,7 +53,7 @@ public:
 
   /// Delete particle p in cell
   /// @note \p p is cell-local index
-  void delete_particle(std::int32_t cell, std::size_t p);
+  void delete_particle(std::int32_t cell, std::size_t p_local);
 
   /// Access field by name (convenience)
   /// Used in Python wrapper

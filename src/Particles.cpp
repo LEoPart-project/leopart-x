@@ -36,7 +36,7 @@ std::size_t Particles<T>::add_particle(
 {
   assert(cell < _cell_to_particle.size());
   assert(x.size() == _fields.at(_posname).value_shape()[0]);
-  int pidx;
+  std::size_t pidx;
   if (_free_list.empty())
   {
     // Need to create a new particle, and extend associated fields
@@ -54,18 +54,26 @@ std::size_t Particles<T>::add_particle(
   }
 
   _cell_to_particle[cell].push_back(pidx);
+  // TODO: remove excessive dynamic allocation
+  _particle_to_cell.insert(_particle_to_cell.begin() + pidx, cell);
   _fields.at(_posname).data(pidx) = x;
   return pidx;
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
-void Particles<T>::delete_particle(std::int32_t cell, std::size_t p)
+void Particles<T>::delete_particle(std::int32_t cell, std::size_t p_local)
 {
+  // delete cell to particle entry
   assert(cell < _cell_to_particle.size());
   std::vector<std::size_t>& cp = _cell_to_particle[cell];
-  assert(p < cp.size());
-  std::size_t pidx = cp[p];
-  cp.erase(cp.begin() + p);
+  assert(p_local < cp.size());
+  std::size_t pidx = cp[p_local];
+  cp.erase(cp.begin() + p_local);
+
+  // delete particle to cell entry. TODO: can we keep this memory?
+  assert(pidx < _particle_to_cell.size());
+  _particle_to_cell.erase(_particle_to_cell.begin() + pidx);
+
   _free_list.push_back(pidx);
 }
 //------------------------------------------------------------------------

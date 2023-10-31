@@ -67,18 +67,14 @@ PYBIND11_MODULE(cpp, m)
       .def("add_field", &Particles<dtype>::Particles::add_field)
       .def("add_particle",
           [](Particles<dtype>& self, std::vector<dtype>& px, std::int32_t cell) {
-            self.add_particle(px, cell);
+            return self.add_particle(px, cell);
           })
       .def("delete_particle", &Particles<dtype>::Particles::delete_particle)
       .def("field",
            py::overload_cast<std::string>(&Particles<dtype>::Particles::field),
            py::return_value_policy::reference_internal)
-      .def("cell_to_particle",
-           py::overload_cast<>(&Particles<dtype>::Particles::cell_to_particle,
-                               py::const_))
-      .def("particle_to_cell",
-           py::overload_cast<>(&Particles<dtype>::Particles::particle_to_cell,
-                               py::const_));;
+      .def("cell_to_particle", &Particles<dtype>::Particles::cell_to_particle)
+      .def("particle_to_cell", &Particles<dtype>::Particles::particle_to_cell);
 
   // Generation functions
   m.def("random_reference_tetrahedron",
