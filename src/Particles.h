@@ -10,6 +10,15 @@
 #include <stdexcept>
 #include <map>
 
+namespace dolfinx
+{
+namespace mesh
+{
+  template <std::floating_point T>
+  class Mesh;
+}
+}
+
 namespace leopart
 {
 
@@ -49,7 +58,7 @@ public:
 
   /// Add a particle to a cell
   /// @return New particle index
-  std::size_t add_particle(const std::span<T>& x, std::int32_t cell);
+  std::size_t add_particle(std::span<const T> x, std::int32_t cell);
 
   /// Delete particle p in cell
   /// @note \p p is cell-local index
@@ -67,6 +76,24 @@ public:
   {
     return _fields.at(w);
   }
+
+  inline std::pair<const std::int32_t, const std::size_t> global_to_local(
+    std::size_t p_global) const
+  {
+    const std::int32_t p_cell = _particle_to_cell[p_global];
+    std::span<const std::size_t> cell_ps = _cell_to_particle[p_cell];
+    const std::size_t p_local = std::distance(cell_ps.begin(),
+      std::find(cell_ps.begin(), cell_ps.end(), p_global));
+    return {p_cell, p_local};
+  }
+
+  void relocate_bbox_on_proc(
+    const dolfinx::mesh::Mesh<T>& mesh,
+    std::span<const std::size_t> pidxs);
+
+  void relocate_bbox(
+    const dolfinx::mesh::Mesh<T>& mesh,
+    std::span<const std::size_t> pidxs);
 
 private:
   // Indices of particles in each cell.

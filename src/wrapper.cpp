@@ -73,8 +73,19 @@ PYBIND11_MODULE(cpp, m)
       .def("field",
            py::overload_cast<std::string>(&Particles<dtype>::Particles::field),
            py::return_value_policy::reference_internal)
+      .def("global_to_local", &Particles<dtype>::Particles::global_to_local)
       .def("cell_to_particle", &Particles<dtype>::Particles::cell_to_particle)
-      .def("particle_to_cell", &Particles<dtype>::Particles::particle_to_cell);
+      .def("particle_to_cell", &Particles<dtype>::Particles::particle_to_cell)
+      .def("relocate_bbox",
+           [](Particles<dtype>& self, const dolfinx::mesh::Mesh<dtype_geom>& mesh,
+              const std::vector<std::size_t>& pidxs) {
+            self.relocate_bbox(mesh, pidxs);
+           })
+      .def("relocate_bbox_on_proc",
+           [](Particles<dtype>& self, const dolfinx::mesh::Mesh<dtype_geom>& mesh,
+              const std::vector<std::size_t>& pidxs) {
+            self.relocate_bbox_on_proc(mesh, pidxs);
+           });
 
   // Generation functions
   m.def("random_reference_tetrahedron",
