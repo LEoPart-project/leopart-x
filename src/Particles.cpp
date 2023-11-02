@@ -16,8 +16,12 @@ Particles<T>::Particles(const std::vector<T>& x,
                         const std::size_t gdim) : _particle_to_cell(cells)
 {
   // Find max cell index, and create cell->particle map
-  auto max_cell_it = std::max_element(cells.begin(), cells.end());
-  const std::int32_t max_cell = *max_cell_it;
+  std::int32_t max_cell = 0;
+  if (!cells.empty())
+  {
+    auto max_cell_it = std::max_element(cells.begin(), cells.end());
+    max_cell = *max_cell_it;
+  }
   _cell_to_particle.resize(max_cell + 1);
   for (std::size_t p = 0; p < cells.size(); ++p)
     _cell_to_particle[cells[p]].push_back(p);
@@ -160,6 +164,7 @@ void Particles<T>::relocate_bbox(
     relocate_bbox_on_proc(mesh, pidxs);
     return;
   }
+  const std::int32_t rank = dolfinx::MPI::rank(mesh.comm());
 
   // Resize member if required, TODO: Handle ghosts
   std::shared_ptr<const dolfinx::common::IndexMap> map =
@@ -167,6 +172,7 @@ void Particles<T>::relocate_bbox(
   const std::size_t total_cells = map->size_local();
   if (_cell_to_particle.size() < total_cells)
     _cell_to_particle.resize(total_cells);
+
 
   // Get positions of required pidxs
   std::span<const T> xp_all = field(_posname).data();
@@ -188,7 +194,7 @@ void Particles<T>::relocate_bbox(
   // Mark particles localed outside the domain as lost
   // Delete the local particles which are now off process to make room
   // for (potentially) incoming particles
-  const std::int32_t rank = dolfinx::MPI::rank(mesh.comm());
+  std::vector<std::size_t> pidxs_on_proc;
   for (std::size_t i = 0; i < src_owner.size(); ++i)
   {
     if (src_owner[i] != rank)
@@ -198,16 +204,19 @@ void Particles<T>::relocate_bbox(
       const auto [cell, local_pidx] = global_to_local(pidxs[i]);
       delete_particle(cell, local_pidx);
     }
+    else
+      pidxs_on_proc.push_back(pidxs[i]);
   }
 
   // Curate particles which are still local or those coming
   // from another process
+  std::size_t on_proc_offset = 0;
   for (std::size_t i = 0; i < dest_owner.size(); ++i)
   {
     const std::int32_t new_cell = dest_cells[i];
     if (dest_owner[i] == rank)
     {
-      const std::size_t pidx = pidxs[i];
+      const std::size_t pidx = pidxs_on_proc[on_proc_offset++];
       if (new_cell == _particle_to_cell[pidx])
         continue;
 

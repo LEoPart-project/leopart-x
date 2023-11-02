@@ -57,9 +57,16 @@ PYBIND11_MODULE(cpp, m)
       .def(py::init(
             [](const py::array_t<dtype, py::array::c_style>& px,
                const std::vector<std::int32_t>& p_cells) {
-                if ((px.shape()[1] != 2) and (px.shape()[1] != 3))
+                if (px.shape(0) != p_cells.size())
                   throw std::invalid_argument(
-                    "Particle position value size expected to be 2 or 3");
+                    "Number of particles and particle cells should be equivalent");
+
+                if (p_cells.empty())
+                  return Particles<dtype>({}, {}, 3);
+
+                if ((px.shape(1) != 2) and (px.shape(1) != 3))
+                  throw std::invalid_argument(
+                    "Particle position value size expected to be 3");
                 std::vector<dtype> p_data = std::vector<dtype>(
                   px.data(), px.data() + px.size());
                 return Particles(p_data, p_cells, px.shape()[1]);

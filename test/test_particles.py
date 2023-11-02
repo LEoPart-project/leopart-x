@@ -3,6 +3,12 @@ import leopart.cpp as pyleopart
 import pytest
 
 
+def test_empty_create():
+    x = np.array([[]], dtype=np.float64)
+    p = pyleopart.Particles(x, [])
+    c2p = p.cell_to_particle()
+
+
 def test_simple_create():
     x = np.array([[1, 2, 3]], dtype=np.float64)
     p = pyleopart.Particles(x, [0])

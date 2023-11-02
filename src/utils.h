@@ -30,7 +30,7 @@ void print_mdspan(
       msg += std::to_string(span(i, j)) + ", ";
     msg += "\n";
   }
-  std::cout << msg << std::endl;
+  std::cout << msg << std::endl << std::flush;
 };
 
 /// Format and print 
@@ -40,7 +40,7 @@ void print_iterable(
   std::string msg = prefix + ":\n";
   for (const auto& item: span)
     msg += std::to_string(item) + ", ";
-  std::cout << msg << std::endl;
+  std::cout << msg << std::endl << std::flush;
 };
 
 
