@@ -4,9 +4,11 @@ import pytest
 
 
 def test_empty_create():
-    x = np.array([[]], dtype=np.float64)
+    x = np.array([], dtype=np.float64)
     p = pyleopart.Particles(x, [])
-    c2p = p.cell_to_particle()
+    assert len(p.cell_to_particle()) == 1
+    assert len(p.cell_to_particle()[0]) == 0
+    assert len(p.particle_to_cell()) == 0
 
 
 def test_simple_create():
