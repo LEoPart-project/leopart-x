@@ -77,6 +77,8 @@ public:
     return _fields.at(w);
   }
 
+  /// Given a process local particle index, return the owning cell and cell
+  /// local index.
   inline std::pair<const std::int32_t, const std::size_t> global_to_local(
     std::size_t p_global) const
   {
@@ -87,22 +89,29 @@ public:
     return {p_cell, p_local};
   }
 
+  /// As relocate_bbox. Non-parallel version.
   void relocate_bbox_on_proc(
     const dolfinx::mesh::Mesh<T>& mesh,
     std::span<const std::size_t> pidxs);
 
+  /// Using a bounding box tree, compute the colliding cells of the provided
+  /// global particle indices. These particles are then "relocated" to these
+  /// cells.
+  ///
+  /// @note Does not check for deleted or invalid particles
   void relocate_bbox(
     const dolfinx::mesh::Mesh<T>& mesh,
     std::span<const std::size_t> pidxs);
 
 private:
-  // Indices of particles in each cell.
+  // Process local indices of particles in each cell.
   std::vector<std::vector<std::size_t>> _cell_to_particle;
 
-  // Incides of cells to which particles belong
+  // Local incides of cells to which particles belong
   std::vector<std::int32_t> _particle_to_cell;
 
-  // List of particles which have been deleted, and available for reallocation
+  // List of process local particles which have been deleted and available
+  // for reallocation
   std::vector<std::size_t> _free_list;
 
   // Data in fields over particles
