@@ -25,13 +25,13 @@ tableaus = [
 @pytest.mark.parametrize("tableau", tableaus)
 def test_advect_exact_space(tableau):
     mesh = dolfinx.mesh.create_rectangle(
-        MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [1, 1])
+        MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [8, 8])
 
     x0 = np.array([0.5, 0.0, 0.0], dtype=np.double)
     xp = np.array([x0], dtype=np.double)
     ptcls = pyleopart.Particles(xp, [0])
 
-    V = dolfinx.fem.FunctionSpace(mesh, ("CG", 2, (mesh.geometry.dim,)))
+    V = dolfinx.fem.FunctionSpace(mesh, ("CG", 1, (mesh.geometry.dim,)))
     u = dolfinx.fem.Function(V)
     u.interpolate(lambda x: np.stack((x[1], -x[0])))
     ptcls.add_field("u", [mesh.geometry.dim])
