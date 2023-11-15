@@ -77,6 +77,23 @@ public:
     return _fields.at(w);
   }
 
+  /// Generate process local indices of valid particles, i.e., those
+  /// which have not been allocated as free for assignment with new
+  /// data.
+  inline std::vector<std::size_t> active_pidxs()
+  {
+    const std::size_t num_pidxs = _particle_to_cell.size();
+    std::vector<std::size_t> valid_pidxs(num_pidxs);
+    std::size_t n_valid_particles = 0;
+    for (std::size_t pidx = 0; pidx < num_pidxs; ++pidx)
+    {
+      if (_particle_to_cell[pidx] != INVALID_CELL)
+        valid_pidxs[n_valid_particles++] = pidx;
+    }
+    valid_pidxs.resize(n_valid_particles);
+    return valid_pidxs;
+  }
+
   /// Given a process local particle index, return the owning cell and cell
   /// local index.
   inline std::pair<const std::int32_t, const std::size_t> global_to_local(
