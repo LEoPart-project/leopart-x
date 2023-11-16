@@ -27,19 +27,25 @@ def test_advect_exact_space(tableau):
     mesh = dolfinx.mesh.create_rectangle(
         MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [8, 8])
 
-    x0 = np.array([0.5, 0.0, 0.0], dtype=np.double)
-    xp = np.array([x0], dtype=np.double)
-    ptcls = pyleopart.Particles(xp, [0])
-
     V = dolfinx.fem.FunctionSpace(mesh, ("CG", 1, (mesh.geometry.dim,)))
     u = dolfinx.fem.Function(V)
     u.interpolate(lambda x: np.stack((x[1], -x[0])))
+
+    xp = np.array([[0.5, 0.0, 0.0],
+                   [0.0, 0.5, 0.0],
+                   [0.0, -0.5, 0.0],
+                   [-0.5, 0.5, 0.0],
+                   [-0.5, -0.5, 0.0]], dtype=np.double)
+    ptcls = pyleopart.Particles(xp, [0] * xp.shape[0])
     ptcls.add_field("u", [mesh.geometry.dim])
 
-    r = np.sqrt(x0[0] ** 2 + x0[1] ** 2)
+    # All particles traverse single rotation in same time frame
+    r = np.linalg.norm(xp, axis=1)
     d = 2 * np.pi * r
-    speed = np.sqrt(x0[0] ** 2 + x0[1] ** 2)
+    speed = np.linalg.norm(xp, axis=1)
     t_max = d / speed
+    assert np.all(t_max == t_max[0])
+    t_max = t_max[0]
 
     ptcls.add_field("xn", [3])
     for i in range(tableau.order):
@@ -49,14 +55,15 @@ def test_advect_exact_space(tableau):
     l2_errors = np.zeros_like(n_steps_vals, dtype=np.double)
     dt_vals = t_max / n_steps_vals
     for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
-        ptcls.field("x").data()[:] = x0
-        ptcls.relocate_bbox(mesh._cpp_object, [0])
+        ptcls.field("x").data()[:] = xp
+        ptcls.relocate_bbox(mesh._cpp_object, np.arange(xp.shape[0]))
         t = 0.0
         for j in range(n_steps):
             t += dt
             pyleopart.rk(mesh._cpp_object, ptcls, tableau,
                          lambda t: u._cpp_object, t, dt)
-        l2_errors[run_num] = np.linalg.norm(ptcls.field("x").data() - x0)
+        l2_errors[run_num] = np.sum(np.linalg.norm(
+            ptcls.field("x").data() - xp, axis=1))
 
     rates = np.log(l2_errors[1:] / l2_errors[:-1]) \
             / np.log(dt_vals[1:] / dt_vals[:-1])
