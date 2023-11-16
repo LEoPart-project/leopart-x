@@ -185,13 +185,13 @@ void Particles<T>::relocate_bbox(
 
   // Find ownership of the geometry points
   const auto [src_owner, dest_owner, dest_points, dest_cells] =
-    dolfinx::geometry::determine_point_ownership<T>(mesh, xp);
+    leopart::utils::determine_point_ownership<T>(mesh, xp);
   std::span<const T> dest_points_span(dest_points);
 
   // Find lost particles (outside of the geometry)
   std::vector<std::size_t> lost;
 
-  // Mark particles localed outside the domain as lost
+  // Mark particles located outside the domain as lost.
   // Delete the local particles which are now off process to make room
   // for (potentially) incoming particles
   std::vector<std::size_t> pidxs_on_proc;
@@ -231,7 +231,7 @@ void Particles<T>::relocate_bbox(
     }
     else
     {
-      add_particle(dest_points_span.subspan(i * gdim, gdim), cell);
+      add_particle(dest_points_span.subspan(i * gdim, gdim), new_cell);
     }
   }
 }

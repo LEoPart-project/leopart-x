@@ -213,7 +213,7 @@ void rk(
   {
     return std::string("k") + std::to_string(substep_n);
   };
-  constexpr std::string xn_name("xn");
+  const std::string xn_name("xn");
 
   const int num_steps = tableau.order;
   mdspan_t<const T, 2> a = tableau.a_md();
