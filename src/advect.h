@@ -208,6 +208,13 @@ void rk(
   std::function<std::shared_ptr<dolfinx::fem::Function<T>>(T)> velocity_callback,
   const T t, const T dt)
 {
+  // Field name generator for each RK substep index
+  const auto substep_field_namer = [](const std::size_t substep_n)
+  {
+    return std::string("k") + std::to_string(substep_n);
+  };
+  constexpr std::string xn_name("xn");
+
   const int num_steps = tableau.order;
   mdspan_t<const T, 2> a = tableau.a_md();
   const std::vector<T>& b = tableau.b;
@@ -215,19 +222,19 @@ void rk(
 
   // Store initial position
   std::copy(ptcls.field("x").data().begin(), ptcls.field("x").data().end(),
-            ptcls.field("xn").data().begin());
+            ptcls.field(xn_name).data().begin());
 
   for (std::size_t s = 0; s < num_steps; ++s)
   {
     // Compute k_s = u(t_n + c_s h, x_n + sum_{i=1}^{s-1} a_{si} k_i h)
     if (s != 0)
     {
-      std::span<const T> xn = ptcls.field("xn").data();
+      std::span<const T> xn = ptcls.field(xn_name).data();
       std::vector<T> suffix(xn.size(), 0.0);
       for (std::size_t i = 0; i < s; ++i)
       {
         std::span<const T> ks_data = ptcls.field(
-          std::string("k") + std::to_string(i)).data();
+          substep_field_namer(i)).data();
         const T a_si = a(s, i);
         for (std::size_t j = 0; j < ks_data.size(); ++j)
           suffix[j] += a_si * ks_data[j] * dt;
@@ -241,16 +248,15 @@ void rk(
     }
 
     std::shared_ptr<dolfinx::fem::Function<T>> uh_t = velocity_callback(t + c[s]);
-    leopart::Field<T>& substep_field = ptcls.field(std::string("k") + std::to_string(s));
+    leopart::Field<T>& substep_field = ptcls.field(substep_field_namer(s));
     leopart::transfer::transfer_to_particles<T>(ptcls, substep_field, uh_t);
   }
 
-  std::span<const T> xn = ptcls.field("xn").data();
+  std::span<const T> xn = ptcls.field(xn_name).data();
   std::vector<T> suffix(xn.size(), 0.0);
   for (std::size_t s = 0; s < num_steps; ++s)
   {
-    std::span<const T> ks_data = ptcls.field(
-      std::string("k") + std::to_string(s)).data();
+    std::span<const T> ks_data = ptcls.field(substep_field_namer(s)).data();
     const T b_s = b[s];
     for (std::size_t i = 0; i < suffix.size(); ++i)
       suffix[i] += b_s * ks_data[i];
