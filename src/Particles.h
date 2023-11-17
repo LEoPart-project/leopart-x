@@ -120,6 +120,32 @@ public:
     const dolfinx::mesh::Mesh<T>& mesh,
     std::span<const std::size_t> pidxs);
 
+  /// Adapted from dolfinx::geomety::utils::determine_point_ownership
+  ///
+  /// @brief Given a set of points, determine which process is colliding,
+  /// using the GJK algorithm on cells to determine collisions.
+  ///
+  /// @todo This docstring is unclear. Needs fixing.
+  ///
+  /// @param[in] mesh The mesh
+  /// @param[in] points Points to check for collision (`shape=(num_points,
+  /// 3)`). Storage is row-major.
+  /// @return Tuple (src_owner, dest_owner, dest_points,
+  /// dest_cells), where src_owner is a list of ranks corresponding to the
+  /// input points. dest_owner is a list of ranks found to own
+  /// dest_points. dest_cells contains the corresponding cell for each
+  /// entry in dest_points.
+  ///
+  /// @note dest_owner is sorted
+  /// @note Returns -1 if no colliding process is found
+  /// @note dest_points is flattened row-major, shape (dest_owner.size(), 3)
+  /// @note Only looks through cells owned by the process
+  std::tuple<std::vector<std::int32_t>, std::vector<std::int32_t>, std::vector<T>,
+            std::vector<std::int32_t>>
+  determine_point_ownership(
+    const dolfinx::mesh::Mesh<T>& mesh,
+    std::span<const std::size_t> pidxs);
+
 private:
   // Process local indices of particles in each cell.
   std::vector<std::vector<std::size_t>> _cell_to_particle;
