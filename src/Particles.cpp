@@ -165,6 +165,7 @@ void Particles<T>::relocate_bbox(
     return;
   }
   const std::int32_t rank = dolfinx::MPI::rank(mesh.comm());
+  const std::size_t gdim = field(_posname).value_shape()[0];
 
   // Resize member if required, TODO: Handle ghosts
   std::shared_ptr<const dolfinx::common::IndexMap> map =
@@ -173,19 +174,9 @@ void Particles<T>::relocate_bbox(
   if (_cell_to_particle.size() < total_cells)
     _cell_to_particle.resize(total_cells);
 
-
-  // Get positions of required pidxs
-  std::span<const T> xp_all = field(_posname).data();
-  const std::size_t gdim = field(_posname).value_shape()[0];
-  std::vector<T> xp(pidxs.size() * gdim, 0.0);
-  for (std::size_t i = 0; i < pidxs.size(); ++i)
-  {
-    std::copy_n(xp_all.begin() + pidxs[i] * gdim, gdim, xp.begin() + i * gdim);
-  }
-
   // Find ownership of the geometry points
   const auto [src_owner, dest_owner, dest_points, dest_cells] =
-    leopart::utils::determine_point_ownership<T>(mesh, xp);
+    leopart::utils::determine_point_ownership<T>(*this, mesh, pidxs);
   std::span<const T> dest_points_span(dest_points);
 
   // Find lost particles (outside of the geometry)
@@ -216,11 +207,12 @@ void Particles<T>::relocate_bbox(
     const std::int32_t new_cell = dest_cells[i];
     if (dest_owner[i] == rank)
     {
+      // Particle is already on process
       const std::size_t pidx = pidxs_on_proc[on_proc_offset++];
       if (new_cell == _particle_to_cell[pidx])
         continue;
 
-      // Update old and new cells' particles
+      // Particle changed cell: update old and new cells' particles
       const auto [old_cell, local_pidx] = global_to_local(pidx);
       std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
       cps.erase(cps.begin() + local_pidx);
@@ -231,6 +223,7 @@ void Particles<T>::relocate_bbox(
     }
     else
     {
+      // Particle came from another process
       add_particle(dest_points_span.subspan(i * gdim, gdim), new_cell);
     }
   }
