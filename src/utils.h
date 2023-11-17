@@ -380,13 +380,14 @@ determine_point_ownership(
 
   struct forward_comm_result
   {
+    const std::size_t value_size;
     const std::vector<T> received_data;
-    const std::vector<std::int32_t> recv_sizes;
-    const std::vector<std::int32_t> recv_offsets;
-    const std::vector<std::int32_t> send_sizes;
-    const std::vector<std::int32_t> send_offsets;
+    std::vector<std::int32_t> recv_sizes;
+    std::vector<std::int32_t> recv_offsets;
+    std::vector<std::int32_t> send_sizes;
+    std::vector<std::int32_t> send_offsets;
     const std::vector<std::int32_t> unpack_map;
-    const std::vector<std::int32_t> counter;
+    std::vector<std::int32_t> counter;
   };
 
   auto send_data_foward = [&forward_comm, &out_ranks, &rank_to_neighbor,
@@ -445,6 +446,7 @@ determine_point_ownership(
         recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), forward_comm);
 
     return {
+      .value_size=value_size,
       .received_data=std::move(received_data),
       .recv_sizes=std::move(recv_sizes),
       .recv_offsets=std::move(recv_offsets),
@@ -454,14 +456,9 @@ determine_point_ownership(
       .counter=std::move(counter)};
   };
 
-  forward_comm_result res = send_data_foward(points, 3);
-  auto received_points = res.received_data;
-  auto recv_sizes = res.recv_sizes;
-  auto recv_offsets = res.recv_offsets;
-  auto send_sizes = res.send_sizes;
-  auto send_offsets = res.send_offsets;
-  auto unpack_map = res.unpack_map;
-  auto counter = res.counter;
+  forward_comm_result res_x = send_data_foward(points, 3);
+
+  
 
   // -----------------------------------------------------------------------
   // Compute closest entities on the owning ranks
@@ -472,10 +469,10 @@ determine_point_ownership(
   const int rank = dolfinx::MPI::rank(comm);
   const std::vector<std::int32_t> closest_cells = compute_closest_entity(
       bb, midpoint_tree, mesh,
-      std::span<const T>(received_points.data(), received_points.size()));
+      std::span<const T>(res_x.received_data.data(), res_x.received_data.size()));
   const std::vector<T> squared_distances = squared_distance(
       mesh, tdim, closest_cells,
-      std::span<const T>(received_points.data(), received_points.size()));
+      std::span<const T>(res_x.received_data.data(), res_x.received_data.size()));
 
   // -----------------------------------------------------------------------
   // Communicate reverse the squared differences
@@ -496,22 +493,22 @@ determine_point_ownership(
       std::transform(x.cbegin(), x.cend(), x.begin(),
                      [](auto e) { return (e / 3); });
     };
-    rescale(recv_sizes);
-    rescale(recv_offsets);
-    rescale(send_sizes);
-    rescale(send_offsets);
+    rescale(res_x.recv_sizes);
+    rescale(res_x.recv_offsets);
+    rescale(res_x.send_sizes);
+    rescale(res_x.send_offsets);
 
     // The communication is reversed, so swap recv to send offsets
-    std::swap(recv_sizes, send_sizes);
-    std::swap(recv_offsets, send_offsets);
+    std::swap(res_x.recv_sizes, res_x.send_sizes);
+    std::swap(res_x.recv_offsets, res_x.send_offsets);
   }
 
   // Get distances from closest entity of points that were on the other process
-  std::vector<T> recv_distances(recv_offsets.back());
+  std::vector<T> recv_distances(res_x.recv_offsets.back());
   MPI_Neighbor_alltoallv(
-      squared_distances.data(), send_sizes.data(), send_offsets.data(),
-      dolfinx::MPI::mpi_type<T>(), recv_distances.data(), recv_sizes.data(),
-      recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), reverse_comm);
+      squared_distances.data(), res_x.send_sizes.data(), res_x.send_offsets.data(),
+      dolfinx::MPI::mpi_type<T>(), recv_distances.data(), res_x.recv_sizes.data(),
+      res_x.recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), reverse_comm);
 
   // -----------------------------------------------------------------------
   // For each point find the owning process which minimises the square
@@ -522,9 +519,9 @@ determine_point_ownership(
   std::vector<T> closest_distance(points.size() / 3, -1);
   for (std::size_t i = 0; i < out_ranks.size(); i++)
   {
-    for (std::int32_t j = recv_offsets[i]; j < recv_offsets[i + 1]; j++)
+    for (std::int32_t j = res_x.recv_offsets[i]; j < res_x.recv_offsets[i + 1]; j++)
     {
-      const std::int32_t pos = unpack_map[j];
+      const std::int32_t pos = res_x.unpack_map[j];
       // If point has not been found yet distance is negative
       // If new received distance smaller than current distance choose owner
       if (auto d = closest_distance[pos]; d < 0 or d > recv_distances[j])
@@ -540,28 +537,28 @@ determine_point_ownership(
   // -----------------------------------------------------------------------
 
   // Communication is reversed again to send dest ranks to all processes
-  std::swap(send_sizes, recv_sizes);
-  std::swap(send_offsets, recv_offsets);
+  std::swap(res_x.send_sizes, res_x.recv_sizes);
+  std::swap(res_x.send_offsets, res_x.recv_offsets);
 
   // Pack ownership data
-  std::vector<std::int32_t> send_owners(send_offsets.back());
-  std::fill(counter.begin(), counter.end(), 0);
+  std::vector<std::int32_t> send_owners(res_x.send_offsets.back());
+  std::fill(res_x.counter.begin(), res_x.counter.end(), 0);
   for (std::size_t i = 0; i < points.size() / 3; ++i)
   {
     for (auto p : collisions.links(i))
     {
       int neighbor = rank_to_neighbor[p];
-      send_owners[send_offsets[neighbor] + counter[neighbor]++]
+      send_owners[res_x.send_offsets[neighbor] + res_x.counter[neighbor]++]
           = point_owners[i];
     }
   }
 
   // Send ownership info
-  std::vector<std::int32_t> dest_ranks(recv_offsets.back());
+  std::vector<std::int32_t> dest_ranks(res_x.recv_offsets.back());
   MPI_Neighbor_alltoallv(
-      send_owners.data(), send_sizes.data(), send_offsets.data(),
+      send_owners.data(), res_x.send_sizes.data(), res_x.send_offsets.data(),
       dolfinx::MPI::mpi_type<std::int32_t>(), dest_ranks.data(),
-      recv_sizes.data(), recv_offsets.data(),
+      res_x.recv_sizes.data(), res_x.recv_offsets.data(),
       dolfinx::MPI::mpi_type<std::int32_t>(), forward_comm);
 
 
@@ -571,19 +568,19 @@ determine_point_ownership(
 
   // Unpack dest ranks if point owner is this rank
   std::vector<std::int32_t> owned_recv_ranks;
-  owned_recv_ranks.reserve(recv_offsets.back());
+  owned_recv_ranks.reserve(res_x.recv_offsets.back());
   std::vector<T> owned_recv_points;
   std::vector<std::int32_t> owned_recv_cells;
   for (std::size_t i = 0; i < in_ranks.size(); i++)
   {
-    for (std::int32_t j = recv_offsets[i]; j < recv_offsets[i + 1]; j++)
+    for (std::int32_t j = res_x.recv_offsets[i]; j < res_x.recv_offsets[i + 1]; j++)
     {
       if (rank == dest_ranks[j])
       {
         owned_recv_ranks.push_back(in_ranks[i]);
         owned_recv_points.insert(
-            owned_recv_points.end(), std::next(received_points.cbegin(), 3 * j),
-            std::next(received_points.cbegin(), 3 * (j + 1)));
+            owned_recv_points.end(), std::next(res_x.received_data.cbegin(), 3 * j),
+            std::next(res_x.received_data.cbegin(), 3 * (j + 1)));
         owned_recv_cells.push_back(closest_cells[j]);
       }
     }
