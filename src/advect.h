@@ -265,6 +265,7 @@ void rk(
   std::span<T> xp = ptcls.field("x").data();
   for (std::size_t i = 0; i < suffix.size(); ++i)
     xp[i] = xn[i] + dt * suffix[i];
+  ptcls.relocate_bbox(mesh, ptcls.active_pidxs());
 };
 
 } // namespace advect

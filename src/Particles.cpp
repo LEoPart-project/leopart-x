@@ -139,8 +139,11 @@ void Particles<T>::relocate_bbox_on_proc(
 
       // Update old and new cells' particles
       const auto [old_cell, local_pidx] = global_to_local(pidx);
-      std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
-      cps.erase(cps.begin() + local_pidx);
+      if (old_cell != INVALID_CELL)
+      {
+        std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
+        cps.erase(cps.begin() + local_pidx);
+      }
       _cell_to_particle[new_cell].push_back(pidx);
       
       // Update particle's cell
@@ -175,7 +178,7 @@ void Particles<T>::relocate_bbox(
     _cell_to_particle.resize(total_cells);
 
   // Find ownership of the geometry points
-  const auto [src_owner, dest_owner, dest_points, dest_cells] =
+  const auto [src_owner, dest_owner, dest_points, dest_cells, dest_data] =
     determine_point_ownership(mesh, pidxs);
   std::span<const T> dest_points_span(dest_points);
 
@@ -224,7 +227,15 @@ void Particles<T>::relocate_bbox(
     else
     {
       // Particle came from another process
-      add_particle(dest_points_span.subspan(i * gdim, gdim), new_cell);
+      const std::size_t new_pidx = add_particle(
+        dest_points_span.subspan(i * gdim, gdim), new_cell);
+      for (const auto& [field_name, field_data] : dest_data)
+      {
+        const std::size_t field_vs = field(field_name).value_size();
+        std::copy_n(
+          field_data.begin() + i * field_vs, field_vs,
+          field(field_name).data(new_pidx).begin());
+      }
     }
   }
 }
@@ -251,7 +262,7 @@ void Particles<T>::relocate_bbox(
 /// @note Only looks through cells owned by the process
 template <std::floating_point T>
 std::tuple<std::vector<std::int32_t>, std::vector<std::int32_t>, std::vector<T>,
-           std::vector<std::int32_t>>
+           std::vector<std::int32_t>, std::map<std::string, std::vector<T>>>
 Particles<T>::determine_point_ownership(
   const dolfinx::mesh::Mesh<T>& mesh,
   std::span<const std::size_t> pidxs)
@@ -334,7 +345,7 @@ Particles<T>::determine_point_ownership(
     // Count the number of data to send per neighbor process
     std::vector<std::int32_t> send_sizes(out_ranks.size());
     for (std::size_t i = 0; i < data.size() / value_size; ++i)
-      for (auto p : collisions.links(i))
+      for (const auto& p : collisions.links(i))
         send_sizes[rank_to_neighbor[p]] += value_size;
 
     // Compute receive sizes
@@ -357,7 +368,7 @@ Particles<T>::determine_point_ownership(
     std::vector<std::int32_t> unpack_map(send_offsets.back() / value_size);
     for (std::size_t i = 0; i < data.size() / value_size; ++i)
     {
-      for (auto p : collisions.links(i))
+      for (const auto& p : collisions.links(i))
       {
         const int neighbor = rank_to_neighbor[p];
         const int pos = send_offsets[neighbor] + counter[neighbor];
@@ -393,6 +404,24 @@ Particles<T>::determine_point_ownership(
 
   forward_comm_result res_x = send_data_foward(points, 3);
 
+  std::map<std::string, const forward_comm_result> field_comm_data;
+  for (const auto& [field_name, field] : _fields)
+  {
+    if (field_name == _posname)
+      continue;
+
+    std::span<const T> field_data = field.data();
+    const std::size_t field_vs = field.value_size();
+
+    std::vector<T> field_sub_data(pidxs.size() * field_vs, 0.0);
+    for (std::size_t i = 0; i < pidxs.size(); ++i)
+      std::copy_n(field.data(pidxs[i]).begin(), field_vs,
+                  field_sub_data.begin() + i * field_vs);
+    
+    const forward_comm_result res = send_data_foward(
+      field_sub_data, field_vs);
+    field_comm_data.emplace(field_name, std::move(res));
+  }
   
 
   // -----------------------------------------------------------------------
@@ -498,7 +527,7 @@ Particles<T>::determine_point_ownership(
 
 
   // -----------------------------------------------------------------------
-  // Compute the closest cell on the destination rank
+  // On the destination ranks select the appropriate data and return
   // -----------------------------------------------------------------------
 
   // Unpack dest ranks if point owner is this rank
@@ -506,6 +535,9 @@ Particles<T>::determine_point_ownership(
   owned_recv_ranks.reserve(res_x.recv_offsets.back());
   std::vector<T> owned_recv_points;
   std::vector<std::int32_t> owned_recv_cells;
+
+  std::map<std::string, std::vector<T>> owned_recv_data;
+
   for (std::size_t i = 0; i < in_ranks.size(); i++)
   {
     for (std::int32_t j = res_x.recv_offsets[i]; j < res_x.recv_offsets[i + 1]; j++)
@@ -517,6 +549,15 @@ Particles<T>::determine_point_ownership(
             owned_recv_points.end(), std::next(res_x.received_data.cbegin(), 3 * j),
             std::next(res_x.received_data.cbegin(), 3 * (j + 1)));
         owned_recv_cells.push_back(closest_cells[j]);
+
+        for (const auto& [field_name, field_comm_res] : field_comm_data)
+        {
+          const std::vector<T>& field_data = field_comm_res.received_data;
+          std::vector<T>& recv_data = owned_recv_data[field_name];
+          recv_data.insert(recv_data.end(),
+            std::next(field_data.cbegin(), field_comm_res.value_size * j),
+            std::next(field_data.cbegin(), field_comm_res.value_size * (j + 1)));
+        }
       }
     }
   }
@@ -524,8 +565,10 @@ Particles<T>::determine_point_ownership(
   MPI_Comm_free(&forward_comm);
   MPI_Comm_free(&reverse_comm);
 
-  return std::make_tuple(point_owners, owned_recv_ranks, owned_recv_points,
-                         owned_recv_cells);
+  return std::make_tuple(
+    std::move(point_owners), std::move(owned_recv_ranks),
+    std::move(owned_recv_points), std::move(owned_recv_cells),
+    std::move(owned_recv_data));
 }
 //------------------------------------------------------------------------
 template class Particles<double>;

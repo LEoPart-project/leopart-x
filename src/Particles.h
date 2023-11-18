@@ -141,7 +141,7 @@ public:
   /// @note dest_points is flattened row-major, shape (dest_owner.size(), 3)
   /// @note Only looks through cells owned by the process
   std::tuple<std::vector<std::int32_t>, std::vector<std::int32_t>, std::vector<T>,
-            std::vector<std::int32_t>>
+            std::vector<std::int32_t>, std::map<std::string, std::vector<T>>>
   determine_point_ownership(
     const dolfinx::mesh::Mesh<T>& mesh,
     std::span<const std::size_t> pidxs);
