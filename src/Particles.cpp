@@ -16,14 +16,17 @@ Particles<T>::Particles(const std::vector<T>& x,
                         const std::size_t gdim) : _particle_to_cell(cells)
 {
   // Find max cell index, and create cell->particle map
-  auto max_cell_it = std::max_element(cells.begin(), cells.end());
-  if (max_cell_it == cells.end())
-    throw std::runtime_error("Error in cells data");
-  const std::int32_t max_cell = *max_cell_it;
+  std::int32_t max_cell = 0;
+  if (!cells.empty())
+  {
+    auto max_cell_it = std::max_element(cells.begin(), cells.end());
+    max_cell = *max_cell_it;
+  }
   _cell_to_particle.resize(max_cell + 1);
   for (std::size_t p = 0; p < cells.size(); ++p)
     _cell_to_particle[cells[p]].push_back(p);
 
+  // Create position data field
   const std::size_t rows = x.size() / gdim;
   Field<T> fx(_posname, {gdim}, rows);
   std::copy(x.cbegin(), x.cend(), fx.data().begin());
@@ -32,11 +35,11 @@ Particles<T>::Particles(const std::vector<T>& x,
 //------------------------------------------------------------------------
 template <std::floating_point T>
 std::size_t Particles<T>::add_particle(
-  const std::span<T>& x, std::int32_t cell)
+  std::span<const T> x, std::int32_t cell)
 {
   assert(cell < _cell_to_particle.size());
   assert(x.size() == _fields.at(_posname).value_shape()[0]);
-  int pidx;
+  std::size_t pidx;
   if (_free_list.empty())
   {
     // Need to create a new particle, and extend associated fields
@@ -46,6 +49,7 @@ std::size_t Particles<T>::add_particle(
     // Resize all fields
     for (auto& [f_name, f] : _fields)
       f.resize(f.size() + 1);
+    _particle_to_cell.resize(_particle_to_cell.size() + 1);
   }
   else
   {
@@ -54,18 +58,24 @@ std::size_t Particles<T>::add_particle(
   }
 
   _cell_to_particle[cell].push_back(pidx);
-  _fields.at(_posname).data(pidx) = x;
+  _particle_to_cell[pidx] = cell;
+  std::copy_n(x.begin(), x.size(), _fields.at(_posname).data(pidx).begin());
   return pidx;
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
-void Particles<T>::delete_particle(std::int32_t cell, std::size_t p)
+void Particles<T>::delete_particle(std::int32_t cell, std::size_t p_local)
 {
+  // delete cell to particle entry
   assert(cell < _cell_to_particle.size());
   std::vector<std::size_t>& cp = _cell_to_particle[cell];
-  assert(p < cp.size());
-  std::size_t pidx = cp[p];
-  cp.erase(cp.begin() + p);
+  assert(p_local < cp.size());
+  std::size_t pidx = cp[p_local];
+  cp.erase(cp.begin() + p_local);
+
+  assert(pidx < _particle_to_cell.size());
+  _particle_to_cell[pidx] = INVALID_CELL;
+
   _free_list.push_back(pidx);
 }
 //------------------------------------------------------------------------
@@ -80,6 +90,485 @@ void Particles<T>::add_field(
   // (which must exist)
   Field<T> f(name, shape, _fields.at(_posname).size());
   _fields.emplace(std::make_pair(name, std::move(f)));
+}
+//------------------------------------------------------------------------
+template <std::floating_point T>
+void Particles<T>::relocate_bbox_on_proc(
+  const dolfinx::mesh::Mesh<T>& mesh, std::span<const std::size_t> pidxs)
+{
+  // Resize member if required, TODO: Handle ghosts
+  std::shared_ptr<const dolfinx::common::IndexMap> map =
+    mesh.topology()->index_map(mesh.topology()->dim());
+  const std::size_t total_cells = map->size_local();
+  if (_cell_to_particle.size() < total_cells)
+    _cell_to_particle.resize(total_cells);
+
+  // Create bbox tree for mesh
+  std::vector<std::int32_t> cells(total_cells);
+  std::iota(cells.begin(), cells.end(), 0);
+  dolfinx::geometry::BoundingBoxTree<T> tree(
+    mesh, mesh.topology()->dim(), cells);
+
+  // Get positions of required pidxs
+  std::span<const T> xp_all = field(_posname).data();
+  const std::size_t gdim = field(_posname).value_shape()[0];
+  std::vector<T> xp(pidxs.size() * gdim, 0.0);
+  for (std::size_t i = 0; i < pidxs.size(); ++i)
+  {
+    std::copy_n(xp_all.begin() + pidxs[i] * gdim, gdim, xp.begin() + i * gdim);
+  }
+
+  dolfinx::graph::AdjacencyList<std::int32_t> cell_candidates =
+    dolfinx::geometry::compute_collisions<T>(tree, xp);
+  dolfinx::graph::AdjacencyList<std::int32_t> cells_collided =
+    dolfinx::geometry::compute_colliding_cells<T>(mesh, cell_candidates, xp);
+
+  std::vector<std::size_t> lost;
+  for (std::size_t l = 0; l < cells_collided.num_nodes(); ++l)
+  {
+    if (cells_collided.links(l).empty())
+    {
+      lost.push_back(pidxs[l]);
+    }
+    else
+    {
+      const std::size_t pidx = pidxs[l];
+      const std::int32_t new_cell = cells_collided.links(l)[0];
+      if (_particle_to_cell[pidx] == new_cell)
+        continue;
+
+      // Update old and new cells' particles
+      const auto [old_cell, local_pidx] = global_to_local(pidx);
+      if (old_cell != INVALID_CELL)
+      {
+        std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
+        cps.erase(cps.begin() + local_pidx);
+      }
+      _cell_to_particle[new_cell].push_back(pidx);
+      
+      // Update particle's cell
+      _particle_to_cell[pidx] = new_cell;
+    }
+  }
+
+  for (const std::size_t pidx : lost)
+  {
+    const auto [old_cell, local_pidx] = global_to_local(pidx);
+    delete_particle(old_cell, local_pidx);
+  }
+}
+//------------------------------------------------------------------------
+template <std::floating_point T>
+void Particles<T>::relocate_bbox(
+  const dolfinx::mesh::Mesh<T>& mesh, std::span<const std::size_t> pidxs)
+{
+  if (dolfinx::MPI::size(mesh.comm()) == 1)
+  {
+    relocate_bbox_on_proc(mesh, pidxs);
+    return;
+  }
+  const std::int32_t rank = dolfinx::MPI::rank(mesh.comm());
+  const std::size_t gdim = field(_posname).value_shape()[0];
+
+  // Resize member if required, TODO: Handle ghosts
+  std::shared_ptr<const dolfinx::common::IndexMap> map =
+    mesh.topology()->index_map(mesh.topology()->dim());
+  const std::size_t total_cells = map->size_local();
+  if (_cell_to_particle.size() < total_cells)
+    _cell_to_particle.resize(total_cells);
+
+  // Find ownership of the geometry points
+  const auto [src_owner, dest_owner, dest_points, dest_cells, dest_data] =
+    determine_point_ownership(mesh, pidxs);
+  std::span<const T> dest_points_span(dest_points);
+
+  // Find lost particles (outside of the geometry)
+  std::vector<std::size_t> lost;
+
+  // Mark particles located outside the domain as lost.
+  // Delete the local particles which are now off process to make room
+  // for (potentially) incoming particles
+  std::vector<std::size_t> pidxs_on_proc;
+  for (std::size_t i = 0; i < src_owner.size(); ++i)
+  {
+    if (src_owner[i] != rank)
+    {
+      if (src_owner[i] < 0)
+        lost.push_back(pidxs[i]);
+      const auto [cell, local_pidx] = global_to_local(pidxs[i]);
+      delete_particle(cell, local_pidx);
+    }
+    else
+      pidxs_on_proc.push_back(pidxs[i]);
+  }
+
+  // Curate particles which are still local or those coming
+  // from another process
+  std::size_t on_proc_offset = 0;
+  for (std::size_t i = 0; i < dest_owner.size(); ++i)
+  {
+    const std::int32_t new_cell = dest_cells[i];
+    if (dest_owner[i] == rank)
+    {
+      // Particle is already on process
+      const std::size_t pidx = pidxs_on_proc[on_proc_offset++];
+      if (new_cell == _particle_to_cell[pidx])
+        continue;
+
+      // Particle changed cell: update old and new cells' particles
+      const auto [old_cell, local_pidx] = global_to_local(pidx);
+      std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
+      cps.erase(cps.begin() + local_pidx);
+      _cell_to_particle[new_cell].push_back(pidx);
+
+      // Update particle's cell
+      _particle_to_cell[pidx] = new_cell;
+    }
+    else
+    {
+      // Particle came from another process
+      const std::size_t new_pidx = add_particle(
+        dest_points_span.subspan(i * gdim, gdim), new_cell);
+      for (const auto& [field_name, field_data] : dest_data)
+      {
+        const std::size_t field_vs = field(field_name).value_size();
+        std::copy_n(
+          field_data.begin() + i * field_vs, field_vs,
+          field(field_name).data(new_pidx).begin());
+      }
+    }
+  }
+}
+//------------------------------------------------------------------------
+/// Adapted from dolfinx::geomety::utils::determine_point_ownership
+///
+/// @brief Given a set of points, determine which process is colliding,
+/// using the GJK algorithm on cells to determine collisions.
+///
+/// @todo This docstring is unclear. Needs fixing.
+///
+/// @param[in] mesh The mesh
+/// @param[in] points Points to check for collision (`shape=(num_points,
+/// 3)`). Storage is row-major.
+/// @return Tuple (src_owner, dest_owner, dest_points,
+/// dest_cells), where src_owner is a list of ranks corresponding to the
+/// input points. dest_owner is a list of ranks found to own
+/// dest_points. dest_cells contains the corresponding cell for each
+/// entry in dest_points.
+///
+/// @note dest_owner is sorted
+/// @note Returns -1 if no colliding process is found
+/// @note dest_points is flattened row-major, shape (dest_owner.size(), 3)
+/// @note Only looks through cells owned by the process
+template <std::floating_point T>
+std::tuple<std::vector<std::int32_t>, std::vector<std::int32_t>, std::vector<T>,
+           std::vector<std::int32_t>, std::map<std::string, std::vector<T>>>
+Particles<T>::determine_point_ownership(
+  const dolfinx::mesh::Mesh<T>& mesh,
+  std::span<const std::size_t> pidxs)
+{
+  using namespace dolfinx;
+  using namespace dolfinx::geometry;
+  
+  MPI_Comm comm = mesh.comm();
+
+  // Create a global bounding-box tree to find candidate processes with
+  // cells that could collide with the points
+  constexpr T padding = 1.0e-4;
+  const int tdim = mesh.topology()->dim();
+  auto cell_map = mesh.topology()->index_map(tdim);
+  const std::int32_t num_cells = cell_map->size_local();
+  // NOTE: Should we send the cells in as input?
+  std::vector<std::int32_t> cells(num_cells, 0);
+  std::iota(cells.begin(), cells.end(), 0);
+  BoundingBoxTree bb(mesh, tdim, cells, padding);
+  BoundingBoxTree midpoint_tree = create_midpoint_tree(mesh, tdim, cells);
+  BoundingBoxTree global_bbtree = bb.create_global_tree(comm);
+
+  // Get positions of required pidxs
+  std::span<const T> xp_all = field("x").data();
+  const std::size_t gdim = field("x").value_shape()[0];
+  std::vector<T> points(pidxs.size() * gdim, 0.0);
+  for (std::size_t i = 0; i < pidxs.size(); ++i)
+  {
+    std::copy_n(xp_all.begin() + pidxs[i] * gdim, gdim, points.begin() + i * gdim);
+  }
+
+  // Compute collisions:
+  // For each point in `x` get the processes it should be sent to
+  graph::AdjacencyList collisions = compute_collisions(global_bbtree, std::span<const T>(points));
+
+  // Get unique list of outgoing ranks
+  std::vector<std::int32_t> out_ranks = collisions.array();
+  std::sort(out_ranks.begin(), out_ranks.end());
+  out_ranks.erase(std::unique(out_ranks.begin(), out_ranks.end()),
+                  out_ranks.end());
+
+  // Compute incoming edges (source processes)
+  std::vector in_ranks = dolfinx::MPI::compute_graph_edges_nbx(comm, out_ranks);
+  std::sort(in_ranks.begin(), in_ranks.end());
+
+  // Create neighborhood communicator in forward direction
+  MPI_Comm forward_comm;
+  MPI_Dist_graph_create_adjacent(
+      comm, in_ranks.size(), in_ranks.data(), MPI_UNWEIGHTED, out_ranks.size(),
+      out_ranks.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false, &forward_comm);
+
+  // Compute map from global mpi rank to neighbor rank, "collisions" uses
+  // global rank
+  std::map<std::int32_t, std::int32_t> rank_to_neighbor;
+  for (std::size_t i = 0; i < out_ranks.size(); i++)
+    rank_to_neighbor[out_ranks[i]] = i;
+
+  // -----------------------------------------------------------------------
+  // Send geometry to global process colliding ranks
+  // -----------------------------------------------------------------------
+
+  struct forward_comm_result
+  {
+    const std::size_t value_size;
+    const std::vector<T> received_data;
+    std::vector<std::int32_t> recv_sizes;
+    std::vector<std::int32_t> recv_offsets;
+    std::vector<std::int32_t> send_sizes;
+    std::vector<std::int32_t> send_offsets;
+    const std::vector<std::int32_t> unpack_map;
+    std::vector<std::int32_t> counter;
+  };
+
+  auto send_data_foward = [&forward_comm, &out_ranks, &rank_to_neighbor,
+                           &in_ranks, &collisions]
+                          (const std::vector<T>& data,
+                           const std::size_t value_size)
+                          -> forward_comm_result
+  {
+    // Count the number of data to send per neighbor process
+    std::vector<std::int32_t> send_sizes(out_ranks.size());
+    for (std::size_t i = 0; i < data.size() / value_size; ++i)
+      for (const auto& p : collisions.links(i))
+        send_sizes[rank_to_neighbor[p]] += value_size;
+
+    // Compute receive sizes
+    std::vector<std::int32_t> recv_sizes(in_ranks.size());
+    send_sizes.reserve(1);
+    recv_sizes.reserve(1);
+    MPI_Request sizes_request;
+    MPI_Ineighbor_alltoall(send_sizes.data(), 1, MPI_INT, recv_sizes.data(), 1,
+                           MPI_INT, forward_comm, &sizes_request);
+
+    // Compute sending offsets
+    std::vector<std::int32_t> send_offsets(send_sizes.size() + 1, 0);
+    std::partial_sum(send_sizes.begin(), send_sizes.end(),
+                    std::next(send_offsets.begin(), 1));
+
+    // Pack data to send and store unpack map
+    std::vector<T> send_data(send_offsets.back());
+    std::vector<std::int32_t> counter(send_sizes.size(), 0);
+    // unpack map: [index in adj list][pos in x]
+    std::vector<std::int32_t> unpack_map(send_offsets.back() / value_size);
+    for (std::size_t i = 0; i < data.size() / value_size; ++i)
+    {
+      for (const auto& p : collisions.links(i))
+      {
+        const int neighbor = rank_to_neighbor[p];
+        const int pos = send_offsets[neighbor] + counter[neighbor];
+        std::copy(std::next(data.begin(), i * value_size),
+                  std::next(data.begin(), (i + 1) * value_size),
+                  std::next(send_data.begin(), pos));
+        unpack_map[pos / value_size] = i;
+        counter[neighbor] += value_size;
+      }
+    }
+
+    MPI_Wait(&sizes_request, MPI_STATUS_IGNORE);
+    std::vector<std::int32_t> recv_offsets(in_ranks.size() + 1, 0);
+    std::partial_sum(recv_sizes.begin(), recv_sizes.end(),
+                    std::next(recv_offsets.begin(), 1));
+
+    std::vector<T> received_data((std::size_t)recv_offsets.back());
+    MPI_Neighbor_alltoallv(
+        send_data.data(), send_sizes.data(), send_offsets.data(),
+        dolfinx::MPI::mpi_type<T>(), received_data.data(), recv_sizes.data(),
+        recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), forward_comm);
+
+    return {
+      .value_size=value_size,
+      .received_data=std::move(received_data),
+      .recv_sizes=std::move(recv_sizes),
+      .recv_offsets=std::move(recv_offsets),
+      .send_sizes=std::move(send_sizes),
+      .send_offsets=std::move(send_offsets),
+      .unpack_map=std::move(unpack_map),
+      .counter=std::move(counter)};
+  };
+
+  forward_comm_result res_x = send_data_foward(points, 3);
+
+  std::map<std::string, const forward_comm_result> field_comm_data;
+  for (const auto& [field_name, field] : _fields)
+  {
+    if (field_name == _posname)
+      continue;
+
+    std::span<const T> field_data = field.data();
+    const std::size_t field_vs = field.value_size();
+
+    std::vector<T> field_sub_data(pidxs.size() * field_vs, 0.0);
+    for (std::size_t i = 0; i < pidxs.size(); ++i)
+      std::copy_n(field.data(pidxs[i]).begin(), field_vs,
+                  field_sub_data.begin() + i * field_vs);
+    
+    const forward_comm_result res = send_data_foward(
+      field_sub_data, field_vs);
+    field_comm_data.emplace(field_name, std::move(res));
+  }
+  
+
+  // -----------------------------------------------------------------------
+  // Compute closest entities on the owning ranks
+  // -----------------------------------------------------------------------
+
+  // Each process checks which local cell is closest and computes the squared
+  // distance to the cell
+  const int rank = dolfinx::MPI::rank(comm);
+  const std::vector<std::int32_t> closest_cells = compute_closest_entity(
+      bb, midpoint_tree, mesh,
+      std::span<const T>(res_x.received_data.data(), res_x.received_data.size()));
+  const std::vector<T> squared_distances = squared_distance(
+      mesh, tdim, closest_cells,
+      std::span<const T>(res_x.received_data.data(), res_x.received_data.size()));
+
+  // -----------------------------------------------------------------------
+  // Communicate reverse the squared differences
+  // -----------------------------------------------------------------------
+
+  // Create neighborhood communicator in the reverse direction: send
+  // back col to requesting processes
+  MPI_Comm reverse_comm;
+  MPI_Dist_graph_create_adjacent(
+      comm, out_ranks.size(), out_ranks.data(), MPI_UNWEIGHTED, in_ranks.size(),
+      in_ranks.data(), MPI_UNWEIGHTED, MPI_INFO_NULL, false, &reverse_comm);
+
+  // Reuse sizes and offsets from first communication set
+  // but divide by three
+  {
+    auto rescale = [](auto& x)
+    {
+      std::transform(x.cbegin(), x.cend(), x.begin(),
+                     [](auto e) { return (e / 3); });
+    };
+    rescale(res_x.recv_sizes);
+    rescale(res_x.recv_offsets);
+    rescale(res_x.send_sizes);
+    rescale(res_x.send_offsets);
+
+    // The communication is reversed, so swap recv to send offsets
+    std::swap(res_x.recv_sizes, res_x.send_sizes);
+    std::swap(res_x.recv_offsets, res_x.send_offsets);
+  }
+
+  // Get distances from closest entity of points that were on the other process
+  std::vector<T> recv_distances(res_x.recv_offsets.back());
+  MPI_Neighbor_alltoallv(
+      squared_distances.data(), res_x.send_sizes.data(), res_x.send_offsets.data(),
+      dolfinx::MPI::mpi_type<T>(), recv_distances.data(), res_x.recv_sizes.data(),
+      res_x.recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), reverse_comm);
+
+  // -----------------------------------------------------------------------
+  // For each point find the owning process which minimises the square
+  // distance to a cell
+  // -----------------------------------------------------------------------
+
+  std::vector<std::int32_t> point_owners(points.size() / 3, -1);
+  std::vector<T> closest_distance(points.size() / 3, -1);
+  for (std::size_t i = 0; i < out_ranks.size(); i++)
+  {
+    for (std::int32_t j = res_x.recv_offsets[i]; j < res_x.recv_offsets[i + 1]; j++)
+    {
+      const std::int32_t pos = res_x.unpack_map[j];
+      // If point has not been found yet distance is negative
+      // If new received distance smaller than current distance choose owner
+      if (auto d = closest_distance[pos]; d < 0 or d > recv_distances[j])
+      {
+        point_owners[pos] = out_ranks[i];
+        closest_distance[pos] = recv_distances[j];
+      }
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Communicate forward the destination ranks for each point
+  // -----------------------------------------------------------------------
+
+  // Communication is reversed again to send dest ranks to all processes
+  std::swap(res_x.send_sizes, res_x.recv_sizes);
+  std::swap(res_x.send_offsets, res_x.recv_offsets);
+
+  // Pack ownership data
+  std::vector<std::int32_t> send_owners(res_x.send_offsets.back());
+  std::fill(res_x.counter.begin(), res_x.counter.end(), 0);
+  for (std::size_t i = 0; i < points.size() / 3; ++i)
+  {
+    for (auto p : collisions.links(i))
+    {
+      int neighbor = rank_to_neighbor[p];
+      send_owners[res_x.send_offsets[neighbor] + res_x.counter[neighbor]++]
+          = point_owners[i];
+    }
+  }
+
+  // Send ownership info
+  std::vector<std::int32_t> dest_ranks(res_x.recv_offsets.back());
+  MPI_Neighbor_alltoallv(
+      send_owners.data(), res_x.send_sizes.data(), res_x.send_offsets.data(),
+      dolfinx::MPI::mpi_type<std::int32_t>(), dest_ranks.data(),
+      res_x.recv_sizes.data(), res_x.recv_offsets.data(),
+      dolfinx::MPI::mpi_type<std::int32_t>(), forward_comm);
+
+
+  // -----------------------------------------------------------------------
+  // On the destination ranks select the appropriate data and return
+  // -----------------------------------------------------------------------
+
+  // Unpack dest ranks if point owner is this rank
+  std::vector<std::int32_t> owned_recv_ranks;
+  owned_recv_ranks.reserve(res_x.recv_offsets.back());
+  std::vector<T> owned_recv_points;
+  std::vector<std::int32_t> owned_recv_cells;
+
+  std::map<std::string, std::vector<T>> owned_recv_data;
+
+  for (std::size_t i = 0; i < in_ranks.size(); i++)
+  {
+    for (std::int32_t j = res_x.recv_offsets[i]; j < res_x.recv_offsets[i + 1]; j++)
+    {
+      if (rank == dest_ranks[j])
+      {
+        owned_recv_ranks.push_back(in_ranks[i]);
+        owned_recv_points.insert(
+            owned_recv_points.end(), std::next(res_x.received_data.cbegin(), 3 * j),
+            std::next(res_x.received_data.cbegin(), 3 * (j + 1)));
+        owned_recv_cells.push_back(closest_cells[j]);
+
+        for (const auto& [field_name, field_comm_res] : field_comm_data)
+        {
+          const std::vector<T>& field_data = field_comm_res.received_data;
+          std::vector<T>& recv_data = owned_recv_data[field_name];
+          recv_data.insert(recv_data.end(),
+            std::next(field_data.cbegin(), field_comm_res.value_size * j),
+            std::next(field_data.cbegin(), field_comm_res.value_size * (j + 1)));
+        }
+      }
+    }
+  }
+
+  MPI_Comm_free(&forward_comm);
+  MPI_Comm_free(&reverse_comm);
+
+  return std::make_tuple(
+    std::move(point_owners), std::move(owned_recv_ranks),
+    std::move(owned_recv_points), std::move(owned_recv_cells),
+    std::move(owned_recv_data));
 }
 //------------------------------------------------------------------------
 template class Particles<double>;

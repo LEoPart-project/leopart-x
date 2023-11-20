@@ -48,7 +48,7 @@ public:
   /// Get the data for a given particle p (non-const)
   std::span<T> data(std::size_t p)
   {
-    return std::span<double>(_data).subspan(_value_size * p, _value_size);
+    return std::span<T>(_data).subspan(_value_size * p, _value_size);
   }
 
   /// Get the associated field data (const)
