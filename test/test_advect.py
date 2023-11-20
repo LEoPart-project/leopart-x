@@ -51,7 +51,7 @@ def test_advect_exact_space(tableau):
     for i in range(tableau.order):
         ptcls.add_field(f"k{i}", [3])
 
-    n_steps_vals = np.array([20, 40, 80], dtype=int)
+    n_steps_vals = np.array([40, 60, 80], dtype=int)
     l2_errors = np.zeros_like(n_steps_vals, dtype=np.double)
     dt_vals = t_max / n_steps_vals
     for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
