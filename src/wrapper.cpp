@@ -96,6 +96,11 @@ PYBIND11_MODULE(cpp, m)
            [](Particles<dtype>& self, const dolfinx::mesh::Mesh<dtype_geom>& mesh,
               const std::vector<std::size_t>& pidxs) {
             self.relocate_bbox_on_proc(mesh, pidxs);
+           })
+      .def("generate_minimum_particles_per_cell",
+           [](Particles<dtype>& self, const dolfinx::mesh::Mesh<dtype_geom>& mesh,
+              const std::size_t np_per_cell) {
+            self.generate_minimum_particles_per_cell(mesh, np_per_cell);
            });
 
   // Generation functions
@@ -116,8 +121,19 @@ PYBIND11_MODULE(cpp, m)
         },
         py::return_value_policy::move);
   m.def("mesh_fill",
-        [](std::shared_ptr<dolfinx::mesh::Mesh<dtype_geom>> mesh, dtype density) {
-          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, density);
+        [](std::shared_ptr<dolfinx::mesh::Mesh<dtype_geom>> mesh, std::size_t np_per_cell) {
+          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, np_per_cell);
+          const std::size_t gdim = mesh->geometry().dim();
+          std::array<std::size_t, 2> shape = {xp_all.size() / gdim, gdim};
+          auto ret_val = std::make_tuple<py::array_t<dtype, py::array::c_style>, std::vector<std::int32_t>>(
+            py::array_t<dtype, py::array::c_style>(shape, xp_all.data()), std::move(np_cells));
+          return ret_val;
+        }, py::return_value_policy::move);
+  m.def("mesh_fill",
+        [](std::shared_ptr<dolfinx::mesh::Mesh<dtype_geom>> mesh,
+           std::vector<std::size_t>& no_per_cell,
+           std::vector<std::int32_t>& cells) {
+          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, no_per_cell, cells);
           const std::size_t gdim = mesh->geometry().dim();
           std::array<std::size_t, 2> shape = {xp_all.size() / gdim, gdim};
           auto ret_val = std::make_tuple<py::array_t<dtype, py::array::c_style>, std::vector<std::int32_t>>(

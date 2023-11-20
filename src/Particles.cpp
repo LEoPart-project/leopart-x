@@ -6,6 +6,7 @@
 #include <cassert>
 #include <dolfinx.h>
 
+#include "generation.h"
 #include "Particles.h"
 
 using namespace leopart;
@@ -569,6 +570,37 @@ Particles<T>::determine_point_ownership(
     std::move(point_owners), std::move(owned_recv_ranks),
     std::move(owned_recv_points), std::move(owned_recv_cells),
     std::move(owned_recv_data));
+}
+//------------------------------------------------------------------------
+template <std::floating_point T>
+void Particles<T>::generate_minimum_particles_per_cell(
+  const dolfinx::mesh::Mesh<T>& mesh,
+  const std::size_t np_per_cell)
+{
+  const std::int32_t num_cells = mesh.topology()->index_map(
+    mesh.topology()->dim())->size_local();
+  
+  std::vector<std::int32_t> cells_to_populate;
+  std::vector<std::size_t> np_per_cell_vec;
+  for (std::int32_t i = 0; i < num_cells; ++i)
+  {
+    if (_cell_to_particle[i].size() >= np_per_cell)
+      continue;
+
+    cells_to_populate.push_back(i);
+    np_per_cell_vec.push_back(np_per_cell - _cell_to_particle[i].size());
+  }
+
+  const auto [xp_new, p2cell_new] = leopart::generation::mesh_fill(
+    mesh, np_per_cell_vec, cells_to_populate);
+  
+  const int gdim = mesh.geometry().dim();
+  const std::size_t num_new_p = p2cell_new.size();
+  for (std::size_t pidx = 0; pidx < num_new_p; ++pidx)
+  {
+    std::span<const T> x(xp_new.data() + pidx * gdim, gdim);
+    add_particle(x, p2cell_new[pidx]);
+  }
 }
 //------------------------------------------------------------------------
 template class Particles<double>;

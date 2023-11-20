@@ -6,12 +6,14 @@
 #pragma once
 
 #include <cinttypes>
-#include <dolfinx.h>
 #include <random>
 #include <span>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
+
+#include <dolfinx.h>
+
 
 namespace dolfinx
 {
@@ -35,18 +37,29 @@ namespace generation
 
 /// Create a set of points, distributed pro rata to the cell volumes.
 ///
-/// @todo `dolfinx::fem::CoordinateElement::tabulate` performance is too slow
-/// to generate a uniquely random set of points in each cell
+/// @todo `dolfinx::fem::CoordinateElement::tabulate` performance is slow
+///
+/// @note Particles are generated in process owned cells only
 ///
 /// @tparam T Position data type
+/// @param mesh Finite element mesh
 /// @param[in] np_per_cell Number of particles per cell
-/// @param[in] dim Spatial dimension
+/// @param[in] cells The cells in which to generate particles
 ///
 /// @return tuple with point coordinates, cell indices
 template<std::floating_point T>
 std::tuple<std::vector<T>, std::vector<std::int32_t>>
-mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
+mesh_fill(
+  const dolfinx::mesh::Mesh<T>& mesh,
+  std::span<const std::size_t> np_per_cell,
+  std::span<const std::int32_t> cells)
 {
+  if (np_per_cell.size() != cells.size())
+    throw std::runtime_error(
+      "Length of cells (" + std::to_string(cells.size()) + ") "
+      "and particles per cell (" + std::to_string(np_per_cell.size()) + ") "
+      "must be same");
+  
   // Geometric dimension
   const std::size_t gdim = mesh.geometry().dim();
   const int tdim = mesh.topology()->dim();
@@ -62,45 +75,43 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
   const std::size_t num_dofs_g = cmap.dim();
   std::span<const T> x_g = mesh.geometry().x();
 
-  // Array to hold coordinates to return
-  const std::array<std::size_t, 2> Xshape = {np_per_cell, gdim};
-  std::vector<T> coords(Xshape[0] * Xshape[1], 0);
-
   using mdspan2_t = leopart::math::mdspan_t<T, 2>;
   using cmdspan4_t = leopart::math::mdspan_t<const T, 4>;
-
-  // Loop over cells and tabulate dofs
-  std::vector<T> x_b(Xshape[0] * Xshape[1]);
-  mdspan2_t x(x_b.data(), Xshape[0], Xshape[1]);
-
-  std::vector<T> coordinate_dofs_b(num_dofs_g * gdim);
-  mdspan2_t coordinate_dofs(coordinate_dofs_b.data(), num_dofs_g, gdim);
-
-  auto map = mesh.topology()->index_map(tdim);
-  assert(map);
-  const int num_cells = map->size_local() + map->num_ghosts();
-
-  std::span<const std::uint32_t> cell_info;
-
-  const std::array<std::size_t, 4> phi_shape
-      = cmap.tabulate_shape(0, Xshape[0]);
-  std::vector<T> phi_b(
-      std::reduce(phi_shape.begin(), phi_shape.end(), 1, std::multiplies{}));
-  cmdspan4_t phi_full(phi_b.data(), phi_shape);
-  auto phi = MDSPAN_IMPL_STANDARD_NAMESPACE::MDSPAN_IMPL_PROPOSED_NAMESPACE::
-      submdspan(phi_full, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
 
   // Data to be returned
   std::vector<std::int32_t> p_cells;
   std::vector<T> xp_all;
 
-  // Generate coordinates on reference element
-  const std::vector<T> X = random_reference<T>(celltype[0], np_per_cell);
-  cmap.tabulate(0, X, Xshape, phi_b);
-
-  for (int c = 0; c < num_cells; ++c)
+  const std::size_t idxs = cells.size();
+  for (std::size_t i = 0; i < idxs; ++i)
   {
+    const std::int32_t c = cells[i];
+    const std::size_t np = np_per_cell[i];
+
+    // Generate coordinates on reference element
+    const std::array<std::size_t, 2> Xshape = {np, gdim};
+    const std::vector<T> X = random_reference<T>(celltype[0], np);
+
+    // Loop over cells and tabulate dofs
+    std::vector<T> x_b(Xshape[0] * Xshape[1]);
+    mdspan2_t x(x_b.data(), Xshape[0], Xshape[1]);
+
+    std::vector<T> coordinate_dofs_b(num_dofs_g * gdim);
+    mdspan2_t coordinate_dofs(coordinate_dofs_b.data(), num_dofs_g, gdim);
+
+    std::span<const std::uint32_t> cell_info;
+
+    const std::array<std::size_t, 4> phi_shape
+        = cmap.tabulate_shape(0, Xshape[0]);
+    std::vector<T> phi_b(
+        std::reduce(phi_shape.begin(), phi_shape.end(), 1, std::multiplies{}));
+    cmdspan4_t phi_full(phi_b.data(), phi_shape);
+    auto phi = MDSPAN_IMPL_STANDARD_NAMESPACE::MDSPAN_IMPL_PROPOSED_NAMESPACE::
+        submdspan(phi_full, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+                  MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+
+    cmap.tabulate(0, X, Xshape, phi_b);
+
     // Extract cell geometry
     auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::
         MDSPAN_IMPL_PROPOSED_NAMESPACE::submdspan(
@@ -114,11 +125,26 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
 
     // Fill data to be returned
     xp_all.insert(xp_all.end(), x_b.begin(), x_b.end());
-    const std::vector<int> npcells(np_per_cell, c);
+    const std::vector<int> npcells(np, c);
     p_cells.insert(p_cells.end(), npcells.begin(), npcells.end());
   }
 
   return {std::move(xp_all), std::move(p_cells)};
+}
+
+/// As `mesh_fill` for all cells in the mesh
+template<std::floating_point T>
+std::tuple<std::vector<T>, std::vector<std::int32_t>>
+mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
+{
+  const int tdim = mesh.topology()->dim();
+  auto map = mesh.topology()->index_map(tdim);
+  assert(map);
+  const int num_cells = map->size_local();
+  std::vector<std::int32_t> cells(num_cells, 0);
+  std::iota(cells.begin(), cells.end(), 0);
+  const std::vector<std::size_t> np_per_cell_vec(num_cells, np_per_cell);
+  return mesh_fill(mesh, np_per_cell_vec, cells);
 }
 
 /// Create a set of n points at random positions within the cell.
