@@ -386,9 +386,8 @@ Particles<T>::determine_point_ownership(
       {
         const int neighbor = rank_to_neighbor[p];
         const int pos = send_offsets[neighbor] + counter[neighbor];
-        std::copy(std::next(data.begin(), i * value_size),
-                  std::next(data.begin(), (i + 1) * value_size),
-                  std::next(send_data.begin(), pos)); // todo: copy_n
+        std::copy_n(std::next(data.begin(), i * value_size), value_size,
+                    std::next(send_data.begin(), pos));
         unpack_map[pos / value_size] = i;
         counter[neighbor] += value_size;
       }
