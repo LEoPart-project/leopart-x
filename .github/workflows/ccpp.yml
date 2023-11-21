@@ -15,5 +15,7 @@ jobs:
       run: pip3 install pybind11[global]
     - name: build
       run: cd src && pip3 install .
-    - name: test
+    - name: test serial
       run: cd test && python3 -m pytest -s -v .
+    - name: test parallel
+      run: cd test && mpirun -np 2 python3 -m pytest -s -v .
