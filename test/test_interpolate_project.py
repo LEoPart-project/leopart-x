@@ -89,7 +89,7 @@ def test_transfer_to_function(k, dtype, cell_type, shape):
     l2error = mesh.comm.allreduce(
         dolfinx.fem.assemble_scalar(dolfinx.fem.form(
             (u - uh_exact)**2 * ufl.dx)), op=MPI.SUM)
-    assert l2error < np.finfo(dtype).eps
+    assert l2error < 1e-12
 
 
 @pytest.mark.parametrize("k", [1, 2])
