@@ -149,7 +149,8 @@ public:
             std::vector<std::int32_t>, std::map<std::string, std::vector<T>>>
   determine_point_ownership(
     const dolfinx::mesh::Mesh<T>& mesh,
-    std::span<const std::size_t> pidxs);
+    std::span<const std::size_t> pidxs,
+    T padding=1.0e-4);
 
   /// @brief Generate particles such that a minimum number per mesh cell
   /// is available

@@ -97,6 +97,8 @@ template <std::floating_point T>
 void Particles<T>::relocate_bbox_on_proc(
   const dolfinx::mesh::Mesh<T>& mesh, std::span<const std::size_t> pidxs)
 {
+  dolfinx::common::Timer timer("leopart::Particles::relocate_bbox_on_proc");
+
   // Resize member if required, TODO: Handle ghosts
   std::shared_ptr<const dolfinx::common::IndexMap> map =
     mesh.topology()->index_map(mesh.topology()->dim());
@@ -119,11 +121,14 @@ void Particles<T>::relocate_bbox_on_proc(
     std::copy_n(xp_all.begin() + pidxs[i] * gdim, gdim, xp.begin() + i * gdim);
   }
 
+  dolfinx::common::Timer timer1("leopart::Particles::relocate_bbox_on_proc collisions");
   dolfinx::graph::AdjacencyList<std::int32_t> cell_candidates =
     dolfinx::geometry::compute_collisions<T>(tree, xp);
   dolfinx::graph::AdjacencyList<std::int32_t> cells_collided =
     dolfinx::geometry::compute_colliding_cells<T>(mesh, cell_candidates, xp);
+  timer1.stop();
 
+  dolfinx::common::Timer timer2("leopart::Particles::relocate_bbox_on_proc post process");
   std::vector<std::size_t> lost;
   for (std::size_t l = 0; l < cells_collided.num_nodes(); ++l)
   {
@@ -157,12 +162,15 @@ void Particles<T>::relocate_bbox_on_proc(
     const auto [old_cell, local_pidx] = global_to_local(pidx);
     delete_particle(old_cell, local_pidx);
   }
+  timer2.stop();
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
 void Particles<T>::relocate_bbox(
   const dolfinx::mesh::Mesh<T>& mesh, std::span<const std::size_t> pidxs)
 {
+  dolfinx::common::Timer timer("leopart::Particles::relocate_bbox");
+
   if (dolfinx::MPI::size(mesh.comm()) == 1)
   {
     relocate_bbox_on_proc(mesh, pidxs);
@@ -266,16 +274,19 @@ std::tuple<std::vector<std::int32_t>, std::vector<std::int32_t>, std::vector<T>,
            std::vector<std::int32_t>, std::map<std::string, std::vector<T>>>
 Particles<T>::determine_point_ownership(
   const dolfinx::mesh::Mesh<T>& mesh,
-  std::span<const std::size_t> pidxs)
+  std::span<const std::size_t> pidxs,
+  T padding)
 {
   using namespace dolfinx;
   using namespace dolfinx::geometry;
+
+  dolfinx::common::Timer timer("leopart::Particles::determine_point_ownership");
   
   MPI_Comm comm = mesh.comm();
 
+  dolfinx::common::Timer timer1("leopart::Particles::determine_point_ownership global collisions");
   // Create a global bounding-box tree to find candidate processes with
   // cells that could collide with the points
-  constexpr T padding = 1.0e-4;
   const int tdim = mesh.topology()->dim();
   auto cell_map = mesh.topology()->index_map(tdim);
   const std::int32_t num_cells = cell_map->size_local();
@@ -321,9 +332,11 @@ Particles<T>::determine_point_ownership(
   for (std::size_t i = 0; i < out_ranks.size(); i++)
     rank_to_neighbor[out_ranks[i]] = i;
 
+  timer1.stop();
   // -----------------------------------------------------------------------
   // Send geometry to global process colliding ranks
   // -----------------------------------------------------------------------
+  dolfinx::common::Timer timer2("leopart::Particles::determine_point_ownership Send geometry to global process colliding ranks");
 
   struct forward_comm_result
   {
@@ -375,7 +388,7 @@ Particles<T>::determine_point_ownership(
         const int pos = send_offsets[neighbor] + counter[neighbor];
         std::copy(std::next(data.begin(), i * value_size),
                   std::next(data.begin(), (i + 1) * value_size),
-                  std::next(send_data.begin(), pos));
+                  std::next(send_data.begin(), pos)); // todo: copy_n
         unpack_map[pos / value_size] = i;
         counter[neighbor] += value_size;
       }
@@ -409,7 +422,7 @@ Particles<T>::determine_point_ownership(
   for (const auto& [field_name, field] : _fields)
   {
     if (field_name == _posname)
-      continue;
+      continue; // position data is handled separately
 
     std::span<const T> field_data = field.data();
     const std::size_t field_vs = field.value_size();
@@ -423,25 +436,51 @@ Particles<T>::determine_point_ownership(
       field_sub_data, field_vs);
     field_comm_data.emplace(field_name, std::move(res));
   }
-  
 
+  timer2.stop();
   // -----------------------------------------------------------------------
   // Compute closest entities on the owning ranks
   // -----------------------------------------------------------------------
+  dolfinx::common::Timer timer3("leopart::Particles::determine_point_ownership Compute closest entities on owning ranks");
+
+  // Get mesh geometry for closest entity
+  const mesh::Geometry<T>& geometry = mesh.geometry();
+  if (geometry.cmaps().size() > 1)
+    throw std::runtime_error("Mixed topology not supported");
+  std::span<const T> geom_dofs = geometry.x();
+  auto x_dofmap = geometry.dofmap();
+
+  // Compute candidate cells for collisions (and extrapolation)
+  const graph::AdjacencyList<std::int32_t> candidate_collisions
+      = compute_collisions(bb, std::span<const T>(res_x.received_data.data(),
+                                                  res_x.received_data.size()));
 
   // Each process checks which local cell is closest and computes the squared
   // distance to the cell
   const int rank = dolfinx::MPI::rank(comm);
-  const std::vector<std::int32_t> closest_cells = compute_closest_entity(
-      bb, midpoint_tree, mesh,
-      std::span<const T>(res_x.received_data.data(), res_x.received_data.size()));
-  const std::vector<T> squared_distances = squared_distance(
-      mesh, tdim, closest_cells,
-      std::span<const T>(res_x.received_data.data(), res_x.received_data.size()));
+  std::vector<std::int32_t> cell_indicator(res_x.received_data.size() / 3);
+  std::vector<std::int32_t> closest_cells(res_x.received_data.size() / 3);
+  for (std::size_t p = 0; p < res_x.received_data.size(); p += 3)
+  {
+    std::array<T, 3> point;
+    std::copy_n(std::next(res_x.received_data.begin(), p), 3, point.begin());
+    // Find first collding cell among the cells with colliding bounding boxes
+    const int colliding_cell = geometry::compute_first_colliding_cell(
+        mesh, candidate_collisions.links(p / 3), point,
+        10 * std::numeric_limits<T>::epsilon());
+    // If a collding cell is found, store the rank of the current process
+    // which will be sent back to the owner of the point
+    cell_indicator[p / 3] = (colliding_cell >= 0) ? rank : -1;
+    // Store the cell index for lookup once the owning processes has determined
+    // the ownership of the point
+    closest_cells[p / 3] = colliding_cell;
+  }
 
+  timer3.stop();
   // -----------------------------------------------------------------------
   // Communicate reverse the squared differences
   // -----------------------------------------------------------------------
+  dolfinx::common::Timer timer4("leopart::Particles::determine_point_ownership Communicate reverse the squared differences");
 
   // Create neighborhood communicator in the reverse direction: send
   // back col to requesting processes
@@ -468,6 +507,95 @@ Particles<T>::determine_point_ownership(
     std::swap(res_x.recv_offsets, res_x.send_offsets);
   }
 
+  std::vector<std::int32_t> recv_ranks(res_x.recv_offsets.back());
+  MPI_Neighbor_alltoallv(cell_indicator.data(), res_x.send_sizes.data(),
+                         res_x.send_offsets.data(), MPI_INT32_T, recv_ranks.data(),
+                         res_x.recv_sizes.data(), res_x.recv_offsets.data(), MPI_INT32_T,
+                         reverse_comm);
+
+  timer4.stop();
+  // -----------------------------------------------------------------------
+  // For each point find the owning process which minimises the square
+  // distance to a cell
+  // -----------------------------------------------------------------------
+  dolfinx::common::Timer timer5("leopart::Particles::determine_point_ownership Find owning process minimise square dist");
+
+  std::vector<std::int32_t> point_owners(points.size() / 3, -1);
+  for (std::size_t i = 0; i < res_x.unpack_map.size(); i++)
+  {
+    const std::int32_t pos = res_x.unpack_map[i];
+    // Only insert new owner if no owner has previously been found
+    if (recv_ranks[i] >= 0 && point_owners[pos] == -1)
+      point_owners[pos] = recv_ranks[i];
+  }
+
+  // Create extrapolation marker for those points already sent to other
+  // process
+  std::vector<std::uint8_t> send_extrapolate(res_x.recv_offsets.back());
+  for (std::int32_t i = 0; i < res_x.recv_offsets.back(); i++)
+  {
+    const std::int32_t pos = res_x.unpack_map[i];
+    send_extrapolate[i] = point_owners[pos] == -1;
+  }
+
+  timer5.stop();
+  // -----------------------------------------------------------------------
+  // Communicate forward the destination ranks for each point
+  // -----------------------------------------------------------------------
+  dolfinx::common::Timer timer6("leopart::Particles::determine_point_ownership Communicate forward destination ranks");
+
+  // Swap communication direction, to send extrapolation marker to other
+  // processes
+  std::swap(res_x.send_sizes, res_x.recv_sizes);
+  std::swap(res_x.send_offsets, res_x.recv_offsets);
+  std::vector<std::uint8_t> dest_extrapolate(res_x.recv_offsets.back());
+  MPI_Neighbor_alltoallv(send_extrapolate.data(), res_x.send_sizes.data(),
+                         res_x.send_offsets.data(), MPI_UINT8_T,
+                         dest_extrapolate.data(), res_x.recv_sizes.data(),
+                         res_x.recv_offsets.data(), MPI_UINT8_T, forward_comm);
+  
+  std::vector<T> squared_distances(res_x.received_data.size() / 3, -1);
+
+  for (std::size_t i = 0; i < dest_extrapolate.size(); i++)
+  {
+    if (dest_extrapolate[i] == 1)
+    {
+      assert(closest_cells[i] == -1);
+      std::array<T, 3> point;
+      std::copy_n(std::next(res_x.received_data.begin(), 3 * i), 3, point.begin());
+
+      // Find shortest distance among cells with colldiing bounding box
+      T shortest_distance = std::numeric_limits<T>::max();
+      std::int32_t closest_cell = -1;
+      for (auto cell : candidate_collisions.links(i))
+      {
+        auto dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::
+            MDSPAN_IMPL_PROPOSED_NAMESPACE::submdspan(
+                x_dofmap, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+        std::vector<T> nodes(3 * dofs.size());
+        for (std::size_t j = 0; j < dofs.size(); ++j)
+        {
+          const int pos = 3 * dofs[j];
+          for (std::size_t k = 0; k < 3; ++k)
+            nodes[3 * j + k] = geom_dofs[pos + k];
+        }
+        const std::array<T, 3> d = compute_distance_gjk<T>(
+            std::span<const T>(point.data(), point.size()), nodes);
+        if (T current_distance = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+            current_distance < shortest_distance)
+        {
+          shortest_distance = current_distance;
+          closest_cell = cell;
+        }
+      }
+      closest_cells[i] = closest_cell;
+      squared_distances[i] = shortest_distance;
+    }
+  }
+
+  std::swap(res_x.recv_sizes, res_x.send_sizes);
+  std::swap(res_x.recv_offsets, res_x.send_offsets);
+
   // Get distances from closest entity of points that were on the other process
   std::vector<T> recv_distances(res_x.recv_offsets.back());
   MPI_Neighbor_alltoallv(
@@ -475,31 +603,24 @@ Particles<T>::determine_point_ownership(
       dolfinx::MPI::mpi_type<T>(), recv_distances.data(), res_x.recv_sizes.data(),
       res_x.recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), reverse_comm);
 
-  // -----------------------------------------------------------------------
-  // For each point find the owning process which minimises the square
-  // distance to a cell
-  // -----------------------------------------------------------------------
-
-  std::vector<std::int32_t> point_owners(points.size() / 3, -1);
-  std::vector<T> closest_distance(points.size() / 3, -1);
+  // Update point ownership with extrapolation information
+  std::vector<T> closest_distance(res_x.unpack_map.size(),
+                                  std::numeric_limits<T>::max());
   for (std::size_t i = 0; i < out_ranks.size(); i++)
   {
     for (std::int32_t j = res_x.recv_offsets[i]; j < res_x.recv_offsets[i + 1]; j++)
     {
       const std::int32_t pos = res_x.unpack_map[j];
-      // If point has not been found yet distance is negative
-      // If new received distance smaller than current distance choose owner
-      if (auto d = closest_distance[pos]; d < 0 or d > recv_distances[j])
+      auto current_dist = recv_distances[j];
+      // Update if closer than previous guess and was found
+      if (auto d = closest_distance[pos];
+          (current_dist > 0) and (current_dist < d))
       {
         point_owners[pos] = out_ranks[i];
-        closest_distance[pos] = recv_distances[j];
+        closest_distance[pos] = current_dist;
       }
     }
   }
-
-  // -----------------------------------------------------------------------
-  // Communicate forward the destination ranks for each point
-  // -----------------------------------------------------------------------
 
   // Communication is reversed again to send dest ranks to all processes
   std::swap(res_x.send_sizes, res_x.recv_sizes);
@@ -526,10 +647,11 @@ Particles<T>::determine_point_ownership(
       res_x.recv_sizes.data(), res_x.recv_offsets.data(),
       dolfinx::MPI::mpi_type<std::int32_t>(), forward_comm);
 
-
+  timer6.stop();
   // -----------------------------------------------------------------------
   // On the destination ranks select the appropriate data and return
   // -----------------------------------------------------------------------
+  dolfinx::common::Timer timer7("leopart::Particles::determine_point_ownership On the destination ranks select the appropriate data and return");
 
   // Unpack dest ranks if point owner is this rank
   std::vector<std::int32_t> owned_recv_ranks;
@@ -566,6 +688,7 @@ Particles<T>::determine_point_ownership(
   MPI_Comm_free(&forward_comm);
   MPI_Comm_free(&reverse_comm);
 
+  timer7.stop();
   return std::make_tuple(
     std::move(point_owners), std::move(owned_recv_ranks),
     std::move(owned_recv_points), std::move(owned_recv_cells),
