@@ -1,9 +1,13 @@
+import typing
+
 from mpi4py import MPI
 import pathlib
 import numpy as np
 import numpy.typing
 import adios2
 import xml.etree.ElementTree as ET
+
+import leopart.cpp
 
 
 def compute_local_range(comm: MPI.Comm, N: int):
@@ -66,7 +70,8 @@ class XDMFParticlesFile:
                 outfile.write(ET.tostring(self.xml_doc, encoding="unicode"))
 
     def _append_xml_node(
-            self, nglobal: int, gdim_pts: int, t: float, t_str: str):
+            self, nglobal: int, gdim_pts: int, t: float, t_str: str,
+            data_names: typing.Sequence[str]):
         domain = self.temporal_grid
         grid = ET.SubElement(domain, "Grid")
         time = ET.SubElement(grid, "Time")
@@ -83,23 +88,40 @@ class XDMFParticlesFile:
         it0.attrib["Dimensions"] = f"{nglobal} {gdim_pts}"
         it0.attrib["Format"] = "HDF"
         it0.text = self.filename.stem + f".h5:/Step0/Points_{t_str}"
-        attrib = ET.SubElement(grid, "Attribute")
-        attrib.attrib["Name"] = "Values"
-        attrib.attrib["AttributeType"] = "Scalar"
-        attrib.attrib["Center"] = "Node"
-        it1 = ET.SubElement(attrib, "DataItem")
-        it1.attrib["Dimensions"] = f"{nglobal} 1"
-        it1.attrib["Format"] = "HDF"
-        it1.text = self.filename.stem + f".h5:/Step0/Values_{t_str}"
 
-    def write(self, points: np.typing.NDArray, t: float):
+        for data_name in data_names:
+            attrib = ET.SubElement(grid, "Attribute")
+            attrib.attrib["Name"] = data_name
+            attrib.attrib["AttributeType"] = "Scalar"
+            attrib.attrib["Center"] = "Node"
+            it1 = ET.SubElement(attrib, "DataItem")
+            it1.attrib["Dimensions"] = f"{nglobal} 1"
+            it1.attrib["Format"] = "HDF"
+            it1.text = self.filename.stem + f".h5:/Step0/{data_name}_{t_str}"
+
+    def write_particles(self, particles: leopart.cpp.Particles,
+                        t: float,
+                        field_names: typing.Sequence[str] = None):
+        if field_names is None:
+            field_names = []
+        data_map = dict(
+            zip(field_names,
+                (particles.field(field_name).data()
+                 for field_name in field_names)))
+        self.write_points(particles.field("x").data(), data_map, t)
+
+    def write_points(
+            self, points: np.typing.NDArray,
+            data_map: typing.Dict[str, np.typing.NDArray],
+            t: float):
         nlocal = points.shape[0]
         nglobal = self.comm.allreduce(nlocal, op=MPI.SUM)
         local_range = compute_local_range(self.comm, nglobal)
 
         # Update xml data
         t_str = f"{t:.12e}".replace(".", "_").replace("-", "_")
-        self._append_xml_node(nglobal, points.shape[1], t, t_str)
+        self._append_xml_node(nglobal, points.shape[1], t, t_str,
+                              data_map.keys())
 
         # ADIOS2 write binary data
         outfile = self.outfile
@@ -110,11 +132,13 @@ class XDMFParticlesFile:
             start=[local_range[0], 0], count=[nlocal, points.shape[1]])
         outfile.Put(pointvar, points)
 
-        values = np.arange(nlocal) + 5
-        valuevar = io.DefineVariable(
-            f"Values_{t_str}", values, shape=[nglobal, 1],
-            start=[local_range[0], 0], count=[nlocal, 1])
-        outfile.Put(valuevar, values)
+        for data_name, data in data_map.items():
+            assert data.shape[0] == nlocal
+            # TODO: data shape needs to go into the XML node
+            valuevar = io.DefineVariable(
+                f"{data_name}_{t_str}", data, shape=[nglobal, data.shape[1]],
+                start=[local_range[0], 0], count=[nlocal, data.shape[1]])
+            outfile.Put(valuevar, data)
 
         outfile.PerformPuts()
 
