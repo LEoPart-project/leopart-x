@@ -71,7 +71,7 @@ class XDMFParticlesFile:
 
     def _append_xml_node(
             self, nglobal: int, gdim_pts: int, t: float, t_str: str,
-            data_names: typing.Sequence[str]):
+            data_map: typing.Dict[str, np.typing.NDArray]):
         domain = self.temporal_grid
         grid = ET.SubElement(domain, "Grid")
         time = ET.SubElement(grid, "Time")
@@ -89,13 +89,14 @@ class XDMFParticlesFile:
         it0.attrib["Format"] = "HDF"
         it0.text = self.filename.stem + f".h5:/Step0/Points_{t_str}"
 
-        for data_name in data_names:
+        for data_name, data in data_map.items():
             attrib = ET.SubElement(grid, "Attribute")
             attrib.attrib["Name"] = data_name
-            attrib.attrib["AttributeType"] = "Scalar"
+            attribute_type = "Scalar" if data.shape[1] == 1 else "Vector"
+            attrib.attrib["AttributeType"] = attribute_type
             attrib.attrib["Center"] = "Node"
             it1 = ET.SubElement(attrib, "DataItem")
-            it1.attrib["Dimensions"] = f"{nglobal} 1"
+            it1.attrib["Dimensions"] = f"{nglobal} {data.shape[1]}"
             it1.attrib["Format"] = "HDF"
             it1.text = self.filename.stem + f".h5:/Step0/{data_name}_{t_str}"
 
@@ -121,7 +122,7 @@ class XDMFParticlesFile:
         # Update xml data
         t_str = f"{t:.12e}".replace(".", "_").replace("-", "_")
         self._append_xml_node(nglobal, points.shape[1], t, t_str,
-                              data_map.keys())
+                              data_map)
 
         # ADIOS2 write binary data
         outfile = self.outfile
@@ -134,7 +135,6 @@ class XDMFParticlesFile:
 
         for data_name, data in data_map.items():
             assert data.shape[0] == nlocal
-            # TODO: data shape needs to go into the XML node
             valuevar = io.DefineVariable(
                 f"{data_name}_{t_str}", data, shape=[nglobal, data.shape[1]],
                 start=[local_range[0], 0], count=[nlocal, data.shape[1]])
