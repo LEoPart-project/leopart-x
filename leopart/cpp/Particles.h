@@ -122,19 +122,24 @@ public:
 
   /// Adapted from dolfinx::geomety::utils::determine_point_ownership
   ///
-  /// @brief Given a set of points, determine which process is colliding,
-  /// using the GJK algorithm on cells to determine collisions.
+  /// @brief Globally determine cell ownerships of provided points.
   ///
-  /// @todo This docstring is unclear. Needs fixing.
+  /// Ownerships is determined by finding the processes with which
+  /// the provided points collide. Cell collision is then employed
+  /// on the colliding processes' cells to determine ownership.
+  /// If no collision is found, ownership is given to the cell which
+  /// minimises the l2 distance from the cell using the GJK algorithm.
   ///
   /// @param[in] mesh The mesh
   /// @param[in] points Points to check for collision (`shape=(num_points,
   /// 3)`). Storage is row-major.
   /// @return Tuple (src_owner, dest_owner, dest_points,
-  /// dest_cells), where src_owner is a list of ranks corresponding to the
-  /// input points. dest_owner is a list of ranks found to own
-  /// dest_points. dest_cells contains the corresponding cell for each
-  /// entry in dest_points.
+  /// dest_cells, dest_data). src_owner is a list of the ranks on which
+  /// each input point is initialised. dest_owner is a list of ranks found to own
+  /// the input ranks. dest_points is the original point data communicated to 
+  /// the dest_owner rank. dest_cells contains the corresponding cell owning each
+  /// point entry in dest_points. dest_data is any corresponding data from
+  /// the particles' fields.
   ///
   /// @note dest_owner is sorted
   /// @note Returns -1 if no colliding process is found
@@ -144,7 +149,18 @@ public:
             std::vector<std::int32_t>, std::map<std::string, std::vector<T>>>
   determine_point_ownership(
     const dolfinx::mesh::Mesh<T>& mesh,
-    std::span<const std::size_t> pidxs);
+    std::span<const std::size_t> pidxs,
+    T padding=1.0e-4);
+
+  /// @brief Generate particles such that a minimum number per mesh cell
+  /// is available
+  ///
+  /// @note The underlying particles are assumed to be configured for
+  ///       the provided mesh. Consider relocating particles prior to call.
+  ///
+  /// @param[in] np_per_cell Minimum number of particles per cell
+  void generate_minimum_particles_per_cell(
+    const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell);
 
 private:
   // Process local indices of particles in each cell.

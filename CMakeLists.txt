@@ -1,4 +1,4 @@
-# Copyright: (c) 2020 Chris Richardson and Jakob Maljaars
+# Copyright: (c) 2020-2023 Chris Richardson, Jakob Maljaars and Nathan Sime
 # This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
@@ -17,34 +17,40 @@ if (NOT TARGET dolfinx)
 endif()
 
 # Source directories
-set(LEOPART_DIRS external)
+set(LEOPART_DIRS
+    leopart/cpp/external)
 
 # Executable
-add_library(${PROJECT_NAME} SHARED Particles.cpp)
+add_library(
+  ${PROJECT_NAME} SHARED
+  leopart/cpp/Particles.cpp)
 
 # Add source to leopart target, and get sets of header files
 foreach(DIR ${LEOPART_DIRS})
   add_subdirectory(${DIR})
 endforeach()
 
-target_include_directories(${PROJECT_NAME} PUBLIC
-                           "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>")
+target_include_directories(
+  ${PROJECT_NAME} PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>/leopart/cpp")
 
-# Target libraries
+# Target libraries and compiler options
 target_link_libraries(${PROJECT_NAME} dolfinx)
+target_compile_options(
+  ${PROJECT_NAME} PRIVATE
+  -Wno-comment
+  -Wall
+  -Wextra
+  -pedantic
+  -Werror
+  -Wfatal-errors
+  )
 
 # Headers are not being installed
-
-# Do not throw error for 'multi-line comments' (these are typical in
-# rst which includes LaTeX)
-include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-Wno-comment" HAVE_NO_MULTLINE)
-set_source_files_properties(particles.cpp PROPERTIES COMPILE_FLAGS "$<$<BOOL:${HAVE_NO_MULTLINE}>:-g -Wno-comment -Wall -Wextra -pedantic -Werror>")
-
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 CONFIG REQUIRED)
 
-pybind11_add_module(${PY_PROJECT_NAME} MODULE wrapper.cpp)
+pybind11_add_module(${PY_PROJECT_NAME} MODULE leopart/cpp/wrapper.cpp)
 
 # Add DOLFINx libraries.
 target_link_libraries(${PY_PROJECT_NAME} PUBLIC dolfinx ${PROJECT_NAME})

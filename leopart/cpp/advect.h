@@ -208,6 +208,8 @@ void rk(
   std::function<std::shared_ptr<dolfinx::fem::Function<T>>(T)> velocity_callback,
   const T t, const T dt)
 {
+  dolfinx::common::Timer timer("leopart::advect::rk");
+  
   // Field name generator for each RK substep index
   const auto substep_field_namer = [](const std::size_t substep_n)
   {

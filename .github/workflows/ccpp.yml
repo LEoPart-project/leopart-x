@@ -8,12 +8,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:v0.7.0
+    container: dolfinx/dolfinx:v0.7.2
     steps:
     - uses: actions/checkout@v4
     - name: install pybind11
       run: pip3 install pybind11[global]
     - name: build
-      run: cd src && pip3 install .
-    - name: test
+      run: pip3 install .
+    - name: test serial
       run: cd test && python3 -m pytest -s -v .
+    - name: test parallel
+      run: cd test && mpirun -np 2 python3 -m pytest -s -v .
