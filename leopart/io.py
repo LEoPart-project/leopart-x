@@ -11,20 +11,9 @@ import numpy as np
 import numpy.typing
 import adios2
 import xml.etree.ElementTree as ET
+import dolfinx
 
 import leopart.cpp
-
-
-def compute_local_range(comm: MPI.Comm, N: int):
-    rank = comm.rank
-    size = comm.size
-    n = N // size
-    r = N % size
-    # First r processes has one extra value
-    if rank < r:
-        return [rank * (n + 1), (rank + 1) * (n + 1)]
-    else:
-        return [rank * n + r, (rank + 1) * n + r]
 
 
 class XDMFParticlesFile:
@@ -121,8 +110,9 @@ class XDMFParticlesFile:
             data_map: typing.Dict[str, np.typing.NDArray],
             t: float):
         nlocal = points.shape[0]
-        nglobal = self.comm.allreduce(nlocal, op=MPI.SUM)
-        local_range = compute_local_range(self.comm, nglobal)
+        im_data = dolfinx.common.IndexMap(MPI.COMM_WORLD, nlocal)
+        nglobal = im_data.size_global
+        local_range = im_data.local_range
 
         # Update xml data
         t_str = f"{t:.12e}".replace(".", "_").replace("-", "_")
