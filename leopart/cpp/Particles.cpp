@@ -38,8 +38,11 @@ template <std::floating_point T>
 std::size_t Particles<T>::add_particle(
   std::span<const T> x, std::int32_t cell)
 {
-  assert(cell < _cell_to_particle.size());
+  assert(cell != INVALID_CELL);
+  assert(cell >= 0);
+  assert(cell < (std::int32_t) _cell_to_particle.size());
   assert(x.size() == _fields.at(_posname).value_shape()[0]);
+
   std::size_t pidx;
   if (_free_list.empty())
   {
@@ -67,8 +70,11 @@ std::size_t Particles<T>::add_particle(
 template <std::floating_point T>
 void Particles<T>::delete_particle(std::int32_t cell, std::size_t p_local)
 {
+  assert(cell != INVALID_CELL);
+  assert(cell >= 0);
+  assert(cell < (std::int32_t) _cell_to_particle.size());
+
   // delete cell to particle entry
-  assert(cell < _cell_to_particle.size());
   std::vector<std::size_t>& cp = _cell_to_particle[cell];
   assert(p_local < cp.size());
   std::size_t pidx = cp[p_local];
@@ -130,7 +136,7 @@ void Particles<T>::relocate_bbox_on_proc(
 
   dolfinx::common::Timer timer2("leopart::Particles::relocate_bbox_on_proc post process");
   std::vector<std::size_t> lost;
-  for (std::size_t l = 0; l < cells_collided.num_nodes(); ++l)
+  for (std::int32_t l = 0; l < cells_collided.num_nodes(); ++l)
   {
     if (cells_collided.links(l).empty())
     {
@@ -725,5 +731,5 @@ void Particles<T>::generate_minimum_particles_per_cell(
   }
 }
 //------------------------------------------------------------------------
-template class Particles<double>;
+template class leopart::Particles<double>;
 //------------------------------------------------------------------------
