@@ -58,9 +58,7 @@ def test_advect_exact_space(tableau):
             ptcls.field("idx").data().T[:] = np.arange(xp.shape[0],
                                                        dtype=np.double)
         ptcls.relocate_bbox(mesh._cpp_object, np.arange(xp_arr.shape[0]))
-        ptcls.add_field("xn", [3])
-        for i in range(tableau.order):
-            ptcls.add_field(f"k{i}", [3])
+        tableau.check_and_create_fields(ptcls)
 
         t = 0.0
         for j in range(n_steps):

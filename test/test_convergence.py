@@ -58,6 +58,7 @@ def test_l2_project_convergence(tableau, dtype, cell_type):
         xp, p2cell = pyleopart.mesh_fill(mesh._cpp_object, 15)
         xp = np.c_[xp, np.zeros_like(xp[:, 0])]
         ptcls = pyleopart.Particles(xp, p2cell)
+        tableau.check_and_create_fields(ptcls)
 
         V = dolfinx.fem.FunctionSpace(
             mesh, ("CG", max(tableau.order - 1, 1), (mesh.geometry.dim,)))
@@ -74,10 +75,6 @@ def test_l2_project_convergence(tableau, dtype, cell_type):
         ptcls.add_field("phi", [1])
         pyleopart.transfer_to_particles(
             ptcls, ptcls.field("phi"), phi0._cpp_object)
-
-        ptcls.add_field("xn", [3])
-        for i in range(tableau.order):
-            ptcls.add_field(f"k{i}", [3])
 
         t = 0.0
         for j in range(n_steps):
