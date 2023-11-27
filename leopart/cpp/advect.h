@@ -297,6 +297,7 @@ void rk(
     leopart::transfer::transfer_to_particles<T>(ptcls, substep_field, uh_t);
   }
 
+  // Compute \sum^s_{i=1} b_i k_i
   std::span<const T> xn = ptcls.field(xn_name).data();
   std::vector<T> suffix(xn.size(), 0.0);
   for (std::size_t s = 0; s < num_steps; ++s)
@@ -307,6 +308,7 @@ void rk(
       suffix[i] += b_s * ks_data[i];
   }
 
+  // Compute \vec{x} = \vec{x}_0 + \Delta t \sum^s_{i=1} b_i k_i
   std::span<T> xp = ptcls.x().data();
   for (std::size_t i = 0; i < suffix.size(); ++i)
     xp[i] = xn[i] + dt * suffix[i];
