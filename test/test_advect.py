@@ -70,7 +70,7 @@ def test_advect_exact_space(tableau):
 
         active = np.where(np.array(ptcls.particle_to_cell()) != -1)[0]
         idxs = np.array([int(idx) for idx in ptcls.field("idx").data()])[active]
-        l2_err = np.linalg.norm(ptcls.field("x").data()[active] - xp[idxs], axis=1)
+        l2_err = np.linalg.norm(ptcls.x().data()[active] - xp[idxs], axis=1)
         idxs = np.concatenate(mesh.comm.allgather(idxs))
         l2_err = np.concatenate(mesh.comm.allgather(l2_err))
         l2_errors[idxs, run_num] = l2_err

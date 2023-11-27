@@ -14,7 +14,9 @@ using namespace leopart;
 template <std::floating_point T>
 Particles<T>::Particles(const std::vector<T>& x,
                         const std::vector<std::int32_t>& cells,
-                        const std::size_t gdim) : _particle_to_cell(cells)
+                        const std::size_t gdim) :
+                        _particle_to_cell(cells),
+                        _x("x", {gdim}, x.size() / gdim)
 {
   // Find max cell index, and create cell->particle map
   std::int32_t max_cell = 0;
@@ -28,10 +30,7 @@ Particles<T>::Particles(const std::vector<T>& x,
     _cell_to_particle[cells[p]].push_back(p);
 
   // Create position data field
-  const std::size_t rows = x.size() / gdim;
-  Field<T> fx(_posname, {gdim}, rows);
-  std::copy(x.cbegin(), x.cend(), fx.data().begin());
-  _fields.emplace(std::make_pair(_posname, std::move(fx)));
+  std::copy(x.cbegin(), x.cend(), _x.data().begin());
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
@@ -41,7 +40,7 @@ std::size_t Particles<T>::add_particle(
   assert(cell != INVALID_CELL);
   assert(cell >= 0);
   assert(cell < (std::int32_t) _cell_to_particle.size());
-  assert(x.size() == _fields.at(_posname).value_shape()[0]);
+  assert(x.size() == _x.value_shape()[0]);
 
   std::size_t pidx;
   if (_free_list.empty())
@@ -49,7 +48,7 @@ std::size_t Particles<T>::add_particle(
     // Need to create a new particle, and extend associated fields
     // Get new particle index from size of _posname field
     // (which must exist)
-    pidx = _fields.at(_posname).size();
+    pidx = _x.size();
     // Resize all fields
     for (auto& [f_name, f] : _fields)
       f.resize(f.size() + 1);
@@ -63,7 +62,7 @@ std::size_t Particles<T>::add_particle(
 
   _cell_to_particle[cell].push_back(pidx);
   _particle_to_cell[pidx] = cell;
-  std::copy_n(x.begin(), x.size(), _fields.at(_posname).data(pidx).begin());
+  std::copy_n(x.begin(), x.size(), _x.data(pidx).begin());
   return pidx;
 }
 //------------------------------------------------------------------------
@@ -95,7 +94,7 @@ void Particles<T>::add_field(
 
   // Give the field the same number of entries as _posname
   // (which must exist)
-  Field<T> f(name, shape, _fields.at(_posname).size());
+  Field<T> f(name, shape, _x.size());
   _fields.emplace(std::make_pair(name, std::move(f)));
 }
 //------------------------------------------------------------------------
@@ -119,8 +118,8 @@ void Particles<T>::relocate_bbox_on_proc(
     mesh, mesh.topology()->dim(), cells);
 
   // Get positions of required pidxs
-  std::span<const T> xp_all = field(_posname).data();
-  const std::size_t gdim = field(_posname).value_shape()[0];
+  std::span<const T> xp_all = _x.data();
+  const std::size_t gdim = _x.value_shape()[0];
   std::vector<T> xp(pidxs.size() * gdim, 0.0);
   for (std::size_t i = 0; i < pidxs.size(); ++i)
   {
@@ -183,7 +182,7 @@ void Particles<T>::relocate_bbox(
     return;
   }
   const std::int32_t rank = dolfinx::MPI::rank(mesh.comm());
-  const std::size_t gdim = field(_posname).value_shape()[0];
+  const std::size_t gdim = _x.value_shape()[0];
 
   // Resize member if required, TODO: Handle ghosts
   std::shared_ptr<const dolfinx::common::IndexMap> map =
@@ -304,8 +303,8 @@ Particles<T>::determine_point_ownership(
   BoundingBoxTree global_bbtree = bb.create_global_tree(comm);
 
   // Get positions of required pidxs
-  std::span<const T> xp_all = field("x").data();
-  const std::size_t gdim = field("x").value_shape()[0];
+  std::span<const T> xp_all = _x.data();
+  const std::size_t gdim = _x.value_shape()[0];
   std::vector<T> points(pidxs.size() * gdim, 0.0);
   for (std::size_t i = 0; i < pidxs.size(); ++i)
   {
@@ -426,9 +425,6 @@ Particles<T>::determine_point_ownership(
   std::map<std::string, const forward_comm_result> field_comm_data;
   for (const auto& [field_name, field] : _fields)
   {
-    if (field_name == _posname)
-      continue; // position data is handled separately
-
     std::span<const T> field_data = field.data();
     const std::size_t field_vs = field.value_size();
 

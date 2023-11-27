@@ -223,7 +223,7 @@ void rk(
   const std::vector<T>& c = tableau.c;
 
   // Store initial position
-  std::copy(ptcls.field("x").data().begin(), ptcls.field("x").data().end(),
+  std::copy(ptcls.x().data().begin(), ptcls.x().data().end(),
             ptcls.field(xn_name).data().begin());
 
   for (std::size_t s = 0; s < num_steps; ++s)
@@ -242,7 +242,7 @@ void rk(
           suffix[j] += a_si * ks_data[j] * dt;
       }
       
-      std::span<T> xp = ptcls.field("x").data();
+      std::span<T> xp = ptcls.x().data();
       for (std::size_t j = 0; j < xp.size(); ++j)
         xp[j] = xn[j] + suffix[j];
       
@@ -264,7 +264,7 @@ void rk(
       suffix[i] += b_s * ks_data[i];
   }
 
-  std::span<T> xp = ptcls.field("x").data();
+  std::span<T> xp = ptcls.x().data();
   for (std::size_t i = 0; i < suffix.size(); ++i)
     xp[i] = xn[i] + dt * suffix[i];
   ptcls.relocate_bbox(mesh, ptcls.active_pidxs());

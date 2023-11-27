@@ -30,18 +30,18 @@ using leopart::utils::mdspan_t;
 /// \f]
 ///
 /// @tparam T The function scalar type.
-/// @param pax Particles collection
+/// @param particles Particles collection
 /// @param field Field data into which to store the interpolation
 /// @param f The finite element function to be interpolated
 template <dolfinx::scalar T>
-void transfer_to_particles(const Particles<T>& pax, Field<T>& field,
+void transfer_to_particles(const Particles<T>& particles, Field<T>& field,
                            std::shared_ptr<const dolfinx::fem::Function<T>> f)
 {
-  const std::vector<std::int32_t>& p2c = pax.particle_to_cell();
+  const std::vector<std::int32_t>& p2c = particles.particle_to_cell();
 
-  const std::span<const T> x = pax.field("x").data();
+  const std::span<const T> x = particles.x().data();
   const std::array<std::size_t, 2> xshape
-      = {pax.field("x").size(), pax.field("x").value_size()};
+      = {particles.x().size(), particles.x().value_size()};
 
   const std::span<T> u = field.data();
   const std::array<std::size_t, 2> ushape = {field.size(), field.value_size()};
@@ -102,7 +102,7 @@ void transfer_to_function_l2_callback(
   // Basis evaluations, shape (np, space_dimension, value_size)
   const auto [basis_evals, basis_shape]
       = leopart::utils::evaluate_basis_functions<T>(
-          *f->function_space(), pax.field("x").data(), pax.particle_to_cell());
+          *f->function_space(), pax.x().data(), pax.particle_to_cell());
   const mdspan_t<const T, 3> basis_evals_md(basis_evals.data(), basis_shape);
 
   // Assemble and solve Q^T Q u = Q^T L in each cell, where

@@ -27,5 +27,5 @@ def test_simple_mesh_fill(dtype, cell_type):
     mesh = create_mesh(cell_type, dtype, n=2)
     x, c = pyleopart.mesh_fill(mesh._cpp_object, num_p)
     p = pyleopart.Particles(x, c)
-    assert p.field("x").data().shape[1] == mesh.geometry.dim
-    assert np.all(p.field("x").data() == x)
+    assert p.x().data().shape[1] == mesh.geometry.dim
+    assert np.all(p.x().data() == x)

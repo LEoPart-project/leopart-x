@@ -77,6 +77,12 @@ public:
     return _fields.at(w);
   }
 
+  /// Particle positions field (non-const)
+  Field<T>& x() { return _x; };
+
+  /// Particle positions (non-const)
+  const Field<T>& x() const { return _x; };
+
   /// Generate process local indices of valid particles, i.e., those
   /// which have not been allocated as free for assignment with new
   /// data.
@@ -174,8 +180,8 @@ private:
   std::vector<std::size_t> _free_list;
 
   // Data in fields over particles
+  Field<T> _x;
   std::map<std::string, Field<T>> _fields;
-  const std::string _posname = "x";
   const std::int32_t INVALID_CELL = -1;
 };
 } // namespace leopart
