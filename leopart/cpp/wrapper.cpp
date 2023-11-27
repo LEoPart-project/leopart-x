@@ -73,9 +73,7 @@ PYBIND11_MODULE(cpp, m)
                     "Particle position value size expected to be 3");
                 std::vector<dtype> p_data = std::vector<dtype>(
                   px.data(), px.data() + px.size());
-                std::cout << "pybind pre" << std::endl;
                 Particles<dtype> ptcls(p_data, p_cells, px.shape()[1]);
-                std::cout << "pybind parts finished" << std::endl;
                 return ptcls;
                }))
       .def("x", py::overload_cast<>(&Particles<dtype>::Particles::x),
