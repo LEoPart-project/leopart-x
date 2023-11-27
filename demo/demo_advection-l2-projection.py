@@ -36,8 +36,6 @@ l2_errors = np.zeros_like(n_steps_vals, dtype=np.double)
 
 dt_vals = t_max / n_steps_vals
 for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
-    import time
-    then = time.time()
     xp, p2cell = pyleopart.mesh_fill(mesh._cpp_object, 15)
     xp = np.c_[xp, np.zeros_like(xp[:,0])]
     pprint(f"num paticles: {xp.shape[0]}")
