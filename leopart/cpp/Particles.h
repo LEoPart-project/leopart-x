@@ -66,15 +66,20 @@ public:
 
   /// Access field by name (convenience)
   /// Used in Python wrapper
-  Field<T>& field(std::string w)
+  Field<T>& field(const std::string w)
   {
     return _fields.at(w);
   }
 
   // Const versions for internal use
-  const Field<T>& field(std::string w) const
+  const Field<T>& field(const std::string w) const
   {
     return _fields.at(w);
+  }
+
+  bool field_exists(const std::string w) const
+  {
+    return _fields.contains(w);
   }
 
   /// Particle positions field (non-const)

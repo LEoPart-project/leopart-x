@@ -50,6 +50,7 @@ std::size_t Particles<T>::add_particle(
     // (which must exist)
     pidx = _x.size();
     // Resize all fields
+    _x.resize(_x.size() + 1);
     for (auto& [f_name, f] : _fields)
       f.resize(f.size() + 1);
     _particle_to_cell.resize(_particle_to_cell.size() + 1);

@@ -25,6 +25,23 @@ template <std::floating_point T>
 class Tableau
 {
 public:
+  /// Butcher Tableau for use with time integration by
+  /// (explicit) Runge-Kutta (RK) methods.
+  ///
+  /// The tableau for an RK method of order s is defined in the format
+  ///
+  /// c | a
+  /// ------
+  ///   | b
+  ///
+  /// where a is an s x s matrix of coefficients and b and c are arrays 
+  /// of coefficients of length s.
+  ///
+  /// @tparam T The unknown scalar type.
+  /// @param order Method order
+  /// @param a Coefficient matrix, unrolled row major
+  /// @param b Coefficient vector
+  /// @param c Coefficient vector
   Tableau(
     const std::size_t order,
     const std::vector<T> a,
@@ -54,6 +71,26 @@ public:
 
   /// Destructor
   ~Tableau() = default;
+
+  // Field name generator for each RK substep index
+  std::string field_name_substep(const std::size_t substep_n) const
+  {
+    return std::string("k") + std::to_string(substep_n);
+  };
+
+  constexpr std::string field_name_xn() const { return "xn"; }
+
+  void check_and_create_fields(Particles<T> particles) const
+  {
+    const std::size_t gdim = particles.x().value_size();
+
+    if (!particles.field_exists(field_name_xn()))
+      particles.add_field(field_name_xn(), {gdim});
+    
+    for (std::size_t i = 0; i < order; ++i)
+      if (!particles.field_exists(field_name_substep(i)))
+        particles.add_field(field_name_substep(i), {gdim});
+  }
 
   constexpr mdspan_t<const T, 2> a_md() const
   {
@@ -209,14 +246,8 @@ void rk(
   const T t, const T dt)
 {
   dolfinx::common::Timer timer("leopart::advect::rk");
-  
-  // Field name generator for each RK substep index
-  const auto substep_field_namer = [](const std::size_t substep_n)
-  {
-    return std::string("k") + std::to_string(substep_n);
-  };
-  const std::string xn_name("xn");
 
+  const std::string xn_name = tableau.field_name_xn();
   const int num_steps = tableau.order;
   mdspan_t<const T, 2> a = tableau.a_md();
   const std::vector<T>& b = tableau.b;
@@ -236,7 +267,7 @@ void rk(
       for (std::size_t i = 0; i < s; ++i)
       {
         std::span<const T> ks_data = ptcls.field(
-          substep_field_namer(i)).data();
+          tableau.field_name_substep(i)).data();
         const T a_si = a(s, i);
         for (std::size_t j = 0; j < ks_data.size(); ++j)
           suffix[j] += a_si * ks_data[j] * dt;
@@ -250,7 +281,7 @@ void rk(
     }
 
     std::shared_ptr<dolfinx::fem::Function<T>> uh_t = velocity_callback(t + c[s]);
-    leopart::Field<T>& substep_field = ptcls.field(substep_field_namer(s));
+    leopart::Field<T>& substep_field = ptcls.field(tableau.field_name_substep(s));
     leopart::transfer::transfer_to_particles<T>(ptcls, substep_field, uh_t);
   }
 
@@ -258,7 +289,7 @@ void rk(
   std::vector<T> suffix(xn.size(), 0.0);
   for (std::size_t s = 0; s < num_steps; ++s)
   {
-    std::span<const T> ks_data = ptcls.field(substep_field_namer(s)).data();
+    std::span<const T> ks_data = ptcls.field(tableau.field_name_substep(s)).data();
     const T b_s = b[s];
     for (std::size_t i = 0; i < suffix.size(); ++i)
       suffix[i] += b_s * ks_data[i];
