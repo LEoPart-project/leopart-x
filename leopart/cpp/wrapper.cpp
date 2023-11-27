@@ -106,7 +106,8 @@ PYBIND11_MODULE(cpp, m)
            [](Particles<dtype>& self, const dolfinx::mesh::Mesh<dtype_geom>& mesh,
               const std::size_t np_per_cell) {
             self.generate_minimum_particles_per_cell(mesh, np_per_cell);
-           });
+           })
+      .def("field_exists", &Particles<dtype>::Particles::field_exists);
 
   // Generation functions
   m.def("random_reference_tetrahedron",
@@ -226,7 +227,10 @@ PYBIND11_MODULE(cpp, m)
             return py::array_t<dtype, py::array::c_style>(
               self.c.size(), self.c.data(), py::cast(self));
           })
-      .def_readonly("order", &leopart::advect::Tableau<dtype>::order);
+      .def_readonly("order", &leopart::advect::Tableau<dtype>::order)
+      .def("field_name_xn", &leopart::advect::Tableau<dtype>::field_name_xn)
+      .def("field_name_substep", &leopart::advect::Tableau<dtype>::field_name_substep)
+      .def("check_and_create_fields", &leopart::advect::Tableau<dtype>::check_and_create_fields);
 
   // Predefined tableaus
   auto tableaus_module = m.def_submodule("tableaus");

@@ -72,15 +72,25 @@ public:
   /// Destructor
   ~Tableau() = default;
 
-  // Field name generator for each RK substep index
+  /// @brief Field name generator for each RK substep index
+  ///
+  /// @param substep_n Substep index (first substep is 0)
   std::string field_name_substep(const std::size_t substep_n) const
   {
     return std::string("k") + std::to_string(substep_n);
   };
 
+  /// @brief Field name of the particles' original positions used
+  /// in RK integration.
+  ///
+  /// @return Field name
   constexpr std::string field_name_xn() const { return "xn"; }
 
-  void check_and_create_fields(Particles<T> particles) const
+  /// @brief Ensure the particles object has Fields necessary
+  /// to store RK integration data.
+  ///
+  /// @param particles Particles data to be used in RK integration
+  void check_and_create_fields(Particles<T>& particles) const
   {
     const std::size_t gdim = particles.x().value_size();
 
@@ -92,6 +102,8 @@ public:
         particles.add_field(field_name_substep(i), {gdim});
   }
 
+  /// @brief Map unrolled a matrix to mdspan with shape.
+  /// @return a matrix as mdspan
   constexpr mdspan_t<const T, 2> a_md() const
   {
     return mdspan_t<const T, 2>(a.data(), order, order);

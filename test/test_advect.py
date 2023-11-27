@@ -79,3 +79,28 @@ def test_advect_exact_space(tableau):
             / np.log(dt_vals[1:] / dt_vals[:-1])
     TOL = 1e-1
     assert np.all(rates > tableau.order - TOL)
+
+
+@pytest.mark.parametrize("gdim", [2, 3])
+@pytest.mark.parametrize("tableau", tableaus)
+def test_tableau_check_and_create_fields(gdim, tableau):
+    if gdim == 2:
+        mesh = dolfinx.mesh.create_unit_square(
+            MPI.COMM_WORLD, 8, 8)
+    else:
+        mesh = dolfinx.mesh.create_unit_cube(
+            MPI.COMM_WORLD, 4, 4, 4)
+
+    xp, p2c = pyleopart.mesh_fill(mesh._cpp_object, 1)
+    if gdim == 2:
+        xp = np.c_[xp, np.zeros_like(xp[:,0])]
+    ptcls = pyleopart.Particles(xp, p2c)
+
+    tableau.check_and_create_fields(ptcls)
+
+    assert ptcls.field_exists(tableau.field_name_xn())
+    xdim = ptcls.x().value_shape
+    assert ptcls.field(tableau.field_name_xn()).value_shape == xdim
+    for s in range(tableau.order):
+        assert ptcls.field_exists(tableau.field_name_substep(s))
+        assert ptcls.field(tableau.field_name_substep(s)).value_shape == xdim
