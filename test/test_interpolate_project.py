@@ -48,7 +48,7 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
     # Transfer from function to particles
     pyleopart.transfer_to_particles(p, v, u._cpp_object)
 
-    expected = sq_val(p.field("x").data().T).T
+    expected = sq_val(p.x().data().T).T
     assert np.all(
         np.isclose(v.data(), expected,
                    rtol=np.finfo(dtype).eps*1e2, atol=np.finfo(dtype).eps))
@@ -80,7 +80,7 @@ def test_transfer_to_function(k, dtype, cell_type, shape):
     uh_exact.x.scatter_forward()
 
     p.add_field("v", shape)
-    p.field("v").data()[:] = sq_val(p.field("x").data().T).T
+    p.field("v").data()[:] = sq_val(p.x().data().T).T
 
     # Transfer from particles to function
     u = dolfinx.fem.Function(Q)
@@ -129,7 +129,7 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     # Set the particle data to the *un*constrained function
     p.add_field("v", [1])
     p.field("v").data()[:] = unconstrained_func(
-        p.field("x").data().T).reshape((-1, 1))
+        p.x().data().T).reshape((-1, 1))
 
     # Transfer the *un*constrained particle data to the FE function using
     # constrained solve
@@ -173,7 +173,7 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
                 [np.sin(np.pi*x[d]) for d in range(mesh.geometry.dim)], axis=0)
 
         p.add_field("v", [1])
-        p.field("v").data().T[:] = func(p.field("x").data().T)
+        p.field("v").data().T[:] = func(p.x().data().T)
 
         # Transfer from particles to function
         u = dolfinx.fem.Function(Q)

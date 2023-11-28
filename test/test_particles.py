@@ -16,7 +16,7 @@ def test_simple_create():
     p = pyleopart.Particles(x, [0])
     c2p = p.cell_to_particle()
     assert c2p[0][0] == 0
-    assert np.all(p.field("x").data(0) == [1, 2, 3])
+    assert np.all(p.x().data(0) == [1, 2, 3])
 
 
 def test_add_field():

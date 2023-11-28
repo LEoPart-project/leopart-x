@@ -73,8 +73,11 @@ PYBIND11_MODULE(cpp, m)
                     "Particle position value size expected to be 3");
                 std::vector<dtype> p_data = std::vector<dtype>(
                   px.data(), px.data() + px.size());
-                return Particles(p_data, p_cells, px.shape()[1]);
+                Particles<dtype> ptcls(p_data, p_cells, px.shape()[1]);
+                return ptcls;
                }))
+      .def("x", py::overload_cast<>(&Particles<dtype>::Particles::x),
+           py::return_value_policy::reference_internal)
       .def("add_field", &Particles<dtype>::Particles::add_field)
       .def("add_particle",
           [](Particles<dtype>& self, std::vector<dtype>& px, std::int32_t cell) {
@@ -101,45 +104,52 @@ PYBIND11_MODULE(cpp, m)
            [](Particles<dtype>& self, const dolfinx::mesh::Mesh<dtype_geom>& mesh,
               const std::size_t np_per_cell) {
             self.generate_minimum_particles_per_cell(mesh, np_per_cell);
-           });
+           })
+      .def("field_exists", &Particles<dtype>::Particles::field_exists);
 
   // Generation functions
   m.def("random_reference_tetrahedron",
-        [](const std::size_t n) {
+        [](const std::size_t n, const std::size_t seed) {
           const int gdim = 3;
-          std::vector<dtype> array = leopart::generation::random_reference_tetrahedron<dtype>(n);
+          std::vector<dtype> array = leopart::generation::random_reference_tetrahedron<dtype>(n, seed);
           std::array<std::size_t, 2> shape = {array.size() / gdim, gdim};
           return py::array_t<dtype, py::array::c_style>(shape, array.data());
         },
         py::return_value_policy::move);
   m.def("random_reference_triangle",
-        [](const std::size_t n) {
+        [](const std::size_t n, const std::size_t seed) {
           const int gdim = 2;
-          std::vector<dtype> array = leopart::generation::random_reference_triangle<dtype>(n);
+          std::vector<dtype> array = leopart::generation::random_reference_triangle<dtype>(n, seed);
           std::array<std::size_t, 2> shape = {array.size() / gdim, gdim};
           return py::array_t<dtype, py::array::c_style>(shape, array.data());
         },
         py::return_value_policy::move);
   m.def("mesh_fill",
-        [](std::shared_ptr<dolfinx::mesh::Mesh<dtype_geom>> mesh, std::size_t np_per_cell) {
-          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, np_per_cell);
+        [](std::shared_ptr<dolfinx::mesh::Mesh<dtype_geom>> mesh, std::size_t np_per_cell,
+          const std::optional<std::size_t>& seed) {
+          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, np_per_cell, seed);
           const std::size_t gdim = mesh->geometry().dim();
           std::array<std::size_t, 2> shape = {xp_all.size() / gdim, gdim};
           auto ret_val = std::make_tuple<py::array_t<dtype, py::array::c_style>, std::vector<std::int32_t>>(
             py::array_t<dtype, py::array::c_style>(shape, xp_all.data()), std::move(np_cells));
           return ret_val;
-        }, py::return_value_policy::move);
+        },
+        py::arg("mesh"), py::arg("np_per_cell"), py::arg("seed") = std::nullopt,
+        py::return_value_policy::move);
   m.def("mesh_fill",
         [](std::shared_ptr<dolfinx::mesh::Mesh<dtype_geom>> mesh,
-           std::vector<std::size_t>& no_per_cell,
-           std::vector<std::int32_t>& cells) {
-          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, no_per_cell, cells);
+           std::vector<std::size_t>& np_per_cell,
+           std::vector<std::int32_t>& cells,
+           const std::optional<std::size_t>& seed) {
+          auto [xp_all, np_cells] = leopart::generation::mesh_fill(*mesh, np_per_cell, cells, seed);
           const std::size_t gdim = mesh->geometry().dim();
           std::array<std::size_t, 2> shape = {xp_all.size() / gdim, gdim};
           auto ret_val = std::make_tuple<py::array_t<dtype, py::array::c_style>, std::vector<std::int32_t>>(
             py::array_t<dtype, py::array::c_style>(shape, xp_all.data()), std::move(np_cells));
           return ret_val;
-        }, py::return_value_policy::move);
+        },
+        py::arg("mesh"), py::arg("np_per_cell"), py::arg("cells"), py::arg("seed") = std::nullopt,
+        py::return_value_policy::move);
   m.def("generate_at_dof_coords",
         [](std::shared_ptr<dolfinx::fem::FunctionSpace<dtype_geom>> V) {
           auto [xp_all, np_cells] = leopart::generation::generate_at_dof_coords(*V);
@@ -221,7 +231,10 @@ PYBIND11_MODULE(cpp, m)
             return py::array_t<dtype, py::array::c_style>(
               self.c.size(), self.c.data(), py::cast(self));
           })
-      .def_readonly("order", &leopart::advect::Tableau<dtype>::order);
+      .def_readonly("order", &leopart::advect::Tableau<dtype>::order)
+      .def("field_name_xn", &leopart::advect::Tableau<dtype>::field_name_xn)
+      .def("field_name_substep", &leopart::advect::Tableau<dtype>::field_name_substep)
+      .def("check_and_create_fields", &leopart::advect::Tableau<dtype>::check_and_create_fields);
 
   // Predefined tableaus
   auto tableaus_module = m.def_submodule("tableaus");

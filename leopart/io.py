@@ -103,7 +103,7 @@ class XDMFParticlesFile:
             zip(field_names,
                 (particles.field(field_name).data()
                  for field_name in field_names)))
-        self.write_points(particles.field("x").data(), data_map, t)
+        self.write_points(particles.x().data(), data_map, t)
 
     def write_points(
             self, points: np.typing.NDArray,

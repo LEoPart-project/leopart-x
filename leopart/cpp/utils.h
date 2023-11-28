@@ -18,13 +18,25 @@ template <typename T, std::size_t d>
 using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>>;
 
+/// @brief Format and print prefixing the message with the source
+/// MPI rank on MPI_COMM_WORLD
+///
+/// @param str Message to print
+void print(const std::string str)
+{
+  const int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  const std::string msg = "[" + std::to_string(rank) + "]: " + str;
+  std::cout << msg << std::endl << std::flush;
+}
+
 /// Format and print 
 /// @param[in] span Rank 2 mdspan to format and print.
 /// @param[in] prefix An identifier prefixing the string
 void print_mdspan(
   const auto span, const std::string prefix = "")
 {
-  std::string msg = prefix + ":\n";
+  const int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  std::string msg = "[" + std::to_string(rank) + "]: " + prefix + "\n";
   for (int i = 0; i < span.extent(0); ++i)
   {
     for (int j = 0; j < span.extent(1); ++j)
@@ -38,7 +50,8 @@ void print_mdspan(
 void print_iterable(
   const auto span, const std::string prefix = "")
 {
-  std::string msg = prefix + ":\n";
+  const int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  std::string msg = "[" + std::to_string(rank) + "]: " + prefix + "\n";
   for (const auto& item: span)
     msg += std::to_string(item) + ", ";
   std::cout << msg << std::endl << std::flush;

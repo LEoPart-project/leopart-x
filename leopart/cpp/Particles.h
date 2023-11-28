@@ -66,16 +66,27 @@ public:
 
   /// Access field by name (convenience)
   /// Used in Python wrapper
-  Field<T>& field(std::string w)
+  Field<T>& field(const std::string w)
   {
     return _fields.at(w);
   }
 
   // Const versions for internal use
-  const Field<T>& field(std::string w) const
+  const Field<T>& field(const std::string w) const
   {
     return _fields.at(w);
   }
+
+  bool field_exists(const std::string w) const
+  {
+    return _fields.contains(w);
+  }
+
+  /// Particle positions field (non-const)
+  Field<T>& x() { return _x; };
+
+  /// Particle positions (non-const)
+  const Field<T>& x() const { return _x; };
 
   /// Generate process local indices of valid particles, i.e., those
   /// which have not been allocated as free for assignment with new
@@ -174,8 +185,8 @@ private:
   std::vector<std::size_t> _free_list;
 
   // Data in fields over particles
+  Field<T> _x;
   std::map<std::string, Field<T>> _fields;
-  const std::string _posname = "x";
   const std::int32_t INVALID_CELL = -1;
 };
 } // namespace leopart

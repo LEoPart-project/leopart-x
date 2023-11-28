@@ -36,12 +36,11 @@ l2_errors = np.zeros_like(n_steps_vals, dtype=np.double)
 
 dt_vals = t_max / n_steps_vals
 for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
-    import time
-    then = time.time()
     xp, p2cell = pyleopart.mesh_fill(mesh._cpp_object, 15)
     xp = np.c_[xp, np.zeros_like(xp[:,0])]
     pprint(f"num paticles: {xp.shape[0]}")
     ptcls = pyleopart.Particles(xp, p2cell)
+    tableau.check_and_create_fields(ptcls)
 
     V = dolfinx.fem.FunctionSpace(
         mesh, ("CG", max(tableau.order - 1, 1), (mesh.geometry.dim,)))
@@ -52,16 +51,11 @@ for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
 
     DG0 = dolfinx.fem.FunctionSpace(mesh, ("DG", tableau.order - 1))
     phi0 = dolfinx.fem.Function(DG0)
-
     phi0.interpolate(phi0_f)
 
     ptcls.add_field("phi", [1])
     pyleopart.transfer_to_particles(
         ptcls, ptcls.field("phi"), phi0._cpp_object)
-
-    ptcls.add_field("xn", [3])
-    for i in range(tableau.order):
-        ptcls.add_field(f"k{i}", [3])
 
     t = 0.0
     for j in range(n_steps):

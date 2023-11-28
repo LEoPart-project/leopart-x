@@ -58,9 +58,7 @@ def test_advect_exact_space(tableau):
             ptcls.field("idx").data().T[:] = np.arange(xp.shape[0],
                                                        dtype=np.double)
         ptcls.relocate_bbox(mesh._cpp_object, np.arange(xp_arr.shape[0]))
-        ptcls.add_field("xn", [3])
-        for i in range(tableau.order):
-            ptcls.add_field(f"k{i}", [3])
+        tableau.check_and_create_fields(ptcls)
 
         t = 0.0
         for j in range(n_steps):
@@ -70,7 +68,7 @@ def test_advect_exact_space(tableau):
 
         active = np.where(np.array(ptcls.particle_to_cell()) != -1)[0]
         idxs = np.array([int(idx) for idx in ptcls.field("idx").data()])[active]
-        l2_err = np.linalg.norm(ptcls.field("x").data()[active] - xp[idxs], axis=1)
+        l2_err = np.linalg.norm(ptcls.x().data()[active] - xp[idxs], axis=1)
         idxs = np.concatenate(mesh.comm.allgather(idxs))
         l2_err = np.concatenate(mesh.comm.allgather(l2_err))
         l2_errors[idxs, run_num] = l2_err
@@ -79,3 +77,28 @@ def test_advect_exact_space(tableau):
             / np.log(dt_vals[1:] / dt_vals[:-1])
     TOL = 1e-1
     assert np.all(rates > tableau.order - TOL)
+
+
+@pytest.mark.parametrize("gdim", [2, 3])
+@pytest.mark.parametrize("tableau", tableaus)
+def test_tableau_check_and_create_fields(gdim, tableau):
+    if gdim == 2:
+        mesh = dolfinx.mesh.create_unit_square(
+            MPI.COMM_WORLD, 8, 8)
+    else:
+        mesh = dolfinx.mesh.create_unit_cube(
+            MPI.COMM_WORLD, 4, 4, 4)
+
+    xp, p2c = pyleopart.mesh_fill(mesh._cpp_object, 1)
+    if gdim == 2:
+        xp = np.c_[xp, np.zeros_like(xp[:,0])]
+    ptcls = pyleopart.Particles(xp, p2c)
+
+    tableau.check_and_create_fields(ptcls)
+
+    assert ptcls.field_exists(tableau.field_name_xn())
+    xdim = ptcls.x().value_shape
+    assert ptcls.field(tableau.field_name_xn()).value_shape == xdim
+    for s in range(tableau.order):
+        assert ptcls.field_exists(tableau.field_name_substep(s))
+        assert ptcls.field(tableau.field_name_substep(s)).value_shape == xdim
