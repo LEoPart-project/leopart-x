@@ -52,7 +52,8 @@ std::tuple<std::vector<T>, std::vector<std::int32_t>>
 mesh_fill(
   const dolfinx::mesh::Mesh<T>& mesh,
   std::span<const std::size_t> np_per_cell,
-  std::span<const std::int32_t> cells)
+  std::span<const std::int32_t> cells,
+  const std::optional<std::size_t>& seed_int = std::nullopt)
 {
   if (np_per_cell.size() != cells.size())
     throw std::runtime_error(
@@ -90,7 +91,8 @@ mesh_fill(
 
     // Generate coordinates on reference element
     const std::array<std::size_t, 2> Xshape = {np, gdim};
-    const std::vector<T> X = random_reference<T>(celltype[0], np);
+    const std::size_t seed = seed_int.value_or(std::random_device{}());
+    const std::vector<T> X = random_reference<T>(celltype[0], np, seed);
 
     // Loop over cells and tabulate dofs
     std::vector<T> x_b(Xshape[0] * Xshape[1]);
@@ -135,7 +137,10 @@ mesh_fill(
 /// As `mesh_fill` for all cells in the mesh
 template<std::floating_point T>
 std::tuple<std::vector<T>, std::vector<std::int32_t>>
-mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
+mesh_fill(
+  const dolfinx::mesh::Mesh<T>& mesh,
+  const std::size_t np_per_cell,
+  const std::optional<std::size_t>& seed = std::nullopt)
 {
   const int tdim = mesh.topology()->dim();
   auto map = mesh.topology()->index_map(tdim);
@@ -144,7 +149,7 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
   std::vector<std::int32_t> cells(num_cells, 0);
   std::iota(cells.begin(), cells.end(), 0);
   const std::vector<std::size_t> np_per_cell_vec(num_cells, np_per_cell);
-  return mesh_fill(mesh, np_per_cell_vec, cells);
+  return mesh_fill(mesh, np_per_cell_vec, cells, seed);
 }
 
 /// Create a set of n points at random positions within the cell.
@@ -155,17 +160,18 @@ mesh_fill(const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell)
 ///
 /// @return Array of \f(\mathbb{R}^d\f)-coordinates
 template<std::floating_point T>
-std::vector<T> random_reference(dolfinx::mesh::CellType celltype,
-                                std::size_t n)
+std::vector<T> random_reference(
+  const dolfinx::mesh::CellType celltype,
+  const std::size_t n, const std::size_t seed)
 {
   if (celltype == dolfinx::mesh::CellType::triangle)
-    return random_reference_triangle<T>(n);
+    return random_reference_triangle<T>(n, seed);
   if (celltype == dolfinx::mesh::CellType::tetrahedron)
-    return random_reference_tetrahedron<T>(n);
+    return random_reference_tetrahedron<T>(n, seed);
   if (celltype == dolfinx::mesh::CellType::quadrilateral)
-    return random_reference_cube<T>(n, 2);
+    return random_reference_cube<T>(n, 2, seed);
   if (celltype == dolfinx::mesh::CellType::hexahedron)
-    return random_reference_cube<T>(n, 3);
+    return random_reference_cube<T>(n, 3, seed);
 
   throw std::runtime_error("Unsupported cell type");
   return std::vector<T>{};
@@ -179,14 +185,14 @@ std::vector<T> random_reference(dolfinx::mesh::CellType celltype,
 ///
 /// @return Array of \f(\mathbb{R}^3\f)-coordinates
 template<std::floating_point T>
-std::vector<T> random_reference_tetrahedron(std::size_t n)
+std::vector<T> random_reference_tetrahedron(
+  const std::size_t n, const std::size_t seed)
 {
   const std::size_t gdim = 3;
   std::vector<T> p(n * gdim, 1.0);
   std::vector<T> r(gdim);
 
-  std::random_device rd;
-  std::mt19937 rgen(rd());
+  std::mt19937 rgen(seed);
   std::uniform_real_distribution<T> dist(-1.0, 1.0);
 
   for (int i = 0; i < n; ++i)
@@ -233,13 +239,13 @@ std::vector<T> random_reference_tetrahedron(std::size_t n)
 ///
 /// @return Array of \f(\mathbb{R}^2\f)-coordinates
 template<std::floating_point T>
-std::vector<T> random_reference_triangle(const std::size_t n)
+std::vector<T> random_reference_triangle(
+  const std::size_t n, const std::size_t seed)
 {
   const std::size_t gdim = 2;
   std::vector<T> p(n * gdim);
 
-  std::random_device rd;
-  std::mt19937 rgen(rd());
+  std::mt19937 rgen(seed);
   std::uniform_real_distribution<T> dist(-1.0, 1.0);
 
   std::generate(p.begin(), p.end(), [&dist, &rgen]() { return dist(rgen); });
@@ -274,12 +280,12 @@ std::vector<T> random_reference_triangle(const std::size_t n)
 /// @return Array of \f(\mathbb{R}^d\f)-coordinates
 template<std::floating_point T>
 std::vector<T> random_reference_cube(
-  const std::size_t n, const std::size_t gdim)
+  const std::size_t n, const std::size_t gdim,
+  const std::size_t seed)
 {
   std::vector<T> p(n * gdim);
 
-  std::random_device rd;
-  std::mt19937 rgen(rd());
+  std::mt19937 rgen(seed);
   std::uniform_real_distribution<T> dist(0.0, 1.0);
 
   std::generate(p.begin(), p.end(), [&dist, &rgen]() { return dist(rgen); });
