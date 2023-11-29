@@ -1,3 +1,8 @@
+# Copyright (c) 2023 Nathan Sime
+# This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+# License: GNU Lesser GPL version 3 or any later version
+# SPDX-License-Identifier:    LGPL-3.0-or-later
+
 from mpi4py import MPI
 
 import numpy as np
@@ -15,7 +20,7 @@ def create_mesh(cell_type, dtype, n):
     }
 
     cell_dim = dolfinx.mesh.cell_dim(cell_type)
-    return mesh_fn[cell_dim](MPI.COMM_WORLD, *[n]*cell_dim,
+    return mesh_fn[cell_dim](MPI.COMM_WORLD, *[n] * cell_dim,
                              cell_type=cell_type, dtype=dtype)
 
 
@@ -33,7 +38,7 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart)
     if mesh.geometry.dim == 2:
-        x = np.c_[x, np.zeros_like(x[:,0])]
+        x = np.c_[x, np.zeros_like(x[:, 0])]
     p = pyleopart.Particles(x, c)
 
     # Function is exactly represented in FE space
@@ -53,7 +58,7 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
     expected = sq_val(p.x().data().T).T
     assert np.all(
         np.isclose(v.data(), expected,
-                   rtol=np.finfo(dtype).eps*1e2, atol=np.finfo(dtype).eps))
+                   rtol=np.finfo(dtype).eps * 1e2, atol=np.finfo(dtype).eps))
 
 
 @pytest.mark.parametrize("k", [1, 2])
@@ -70,7 +75,7 @@ def test_transfer_to_function(k, dtype, cell_type, shape):
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart)
     if mesh.geometry.dim == 2:
-        x = np.c_[x, np.zeros_like(x[:,0])]
+        x = np.c_[x, np.zeros_like(x[:, 0])]
     p = pyleopart.Particles(x, c)
 
     # Function is exactly represented in FE space
@@ -166,13 +171,14 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
 
         x, c = pyleopart.mesh_fill(mesh._cpp_object, npart)
         if mesh.geometry.dim == 2:
-            x = np.c_[x, np.zeros_like(x[:,0])]
+            x = np.c_[x, np.zeros_like(x[:, 0])]
         p = pyleopart.Particles(x, c)
 
         # Function is exactly represented in FE space
         def func(x):
             return np.prod(
-                [np.sin(np.pi*x[d]) for d in range(mesh.geometry.dim)], axis=0)
+                [np.sin(np.pi * x[d]) for d in range(mesh.geometry.dim)],
+                axis=0)
 
         p.add_field("v", [1])
         p.field("v").data().T[:] = func(p.x().data().T)

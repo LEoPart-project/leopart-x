@@ -1,3 +1,8 @@
+# Copyright (c) 2023 Nathan Sime
+# This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+# License: GNU Lesser GPL version 3 or any later version
+# SPDX-License-Identifier:    LGPL-3.0-or-later
+
 from mpi4py import MPI
 
 import numpy as np
@@ -14,7 +19,7 @@ def create_mesh(cell_type, dtype, n):
     }
 
     cell_dim = dolfinx.mesh.cell_dim(cell_type)
-    return mesh_fn[cell_dim](MPI.COMM_WORLD, *[n]*cell_dim,
+    return mesh_fn[cell_dim](MPI.COMM_WORLD, *[n] * cell_dim,
                              cell_type=cell_type, dtype=dtype)
 
 
@@ -26,10 +31,7 @@ def create_mesh(cell_type, dtype, n):
 def test_relocate_single_particle_per_process(cell_type, dtype):
     mesh = create_mesh(cell_type, dtype, 3)
     interval = np.array([0.0, 1.0])
-    if mesh.geometry.dim == 2:
-        xp_pts = [*[interval] * 2, [0.0]]
-    else:
-        xp_pts = [interval] * 3
+    xp_pts = [*[interval] * 2, [0.0]] if mesh.geometry.dim == 2 else [interval] * 3
     xp = np.array(np.meshgrid(*xp_pts), dtype=np.double).T.reshape((-1, 3))
 
     bad_cells = np.zeros(xp.shape[0], dtype=np.int32)

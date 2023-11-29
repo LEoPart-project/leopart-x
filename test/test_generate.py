@@ -1,3 +1,8 @@
+# Copyright (c) 2023 Nathan Sime
+# This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+# License: GNU Lesser GPL version 3 or any later version
+# SPDX-License-Identifier:    LGPL-3.0-or-later
+
 from mpi4py import MPI
 
 import numpy as np
@@ -14,7 +19,7 @@ def create_mesh(cell_type, dtype, n):
     }
 
     cell_dim = dolfinx.mesh.cell_dim(cell_type)
-    return mesh_fn[cell_dim](MPI.COMM_WORLD, *[n]*cell_dim,
+    return mesh_fn[cell_dim](MPI.COMM_WORLD, *[n] * cell_dim,
                              cell_type=cell_type, dtype=dtype)
 
 

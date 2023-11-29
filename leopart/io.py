@@ -1,4 +1,4 @@
-# Copyright: (c) 2023 Jørgen Dokken and Nathan Sime
+# Copyright (c) 2023 Jørgen Dokken and Nathan Sime
 # This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
@@ -46,9 +46,7 @@ class XDMFParticlesFile:
 
             self.outfile = self.io.Open(
                 str(self.filename.with_suffix(".h5")), adios2.Mode.Write)
-        elif mode is adios2.Mode.Append:
-            raise NotImplementedError
-        elif mode is adios2.Mode.Read:
+        elif mode is adios2.Mode.Append or mode is adios2.Mode.Read:
             raise NotImplementedError
 
     def __del__(self):
@@ -59,7 +57,7 @@ class XDMFParticlesFile:
     def _write_xml(self):
         ET.indent(self.xml_doc, space="\t", level=0)
         if self.comm.rank == 0:
-            with open(self.filename, "w") as outfile:
+            with self.filename.open("w") as outfile:
                 outfile.write(
                     '<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n')
                 outfile.write(ET.tostring(self.xml_doc, encoding="unicode"))
@@ -95,9 +93,9 @@ class XDMFParticlesFile:
             it1.attrib["Format"] = "HDF"
             it1.text = self.filename.stem + f".h5:/Step0/{data_name}_{t_str}"
 
-    def write_particles(self, particles: leopart.cpp.Particles,
-                        t: float,
-                        field_names: typing.Sequence[str] = None):
+    def write_particles(
+            self, particles: leopart.cpp.Particles, t: float,
+            field_names: typing.Optional[typing.Sequence[str]] = None):
         if field_names is None:
             field_names = []
         data_map = dict(

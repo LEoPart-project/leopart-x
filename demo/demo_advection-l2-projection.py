@@ -1,4 +1,4 @@
-# Copyright: (c) 2023 Nathan Sime
+# Copyright (c) 2023 Nathan Sime
 # This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
@@ -39,7 +39,7 @@ l2_errors = np.zeros_like(n_steps_vals, dtype=np.double)
 dt_vals = t_max / n_steps_vals
 for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
     xp, p2cell = pyleopart.mesh_fill(mesh._cpp_object, 15)
-    xp = np.c_[xp, np.zeros_like(xp[:,0])]
+    xp = np.c_[xp, np.zeros_like(xp[:, 0])]
     pprint(f"num paticles: {xp.shape[0]}")
     ptcls = pyleopart.Particles(xp, p2cell)
     tableau.check_and_create_fields(ptcls)
