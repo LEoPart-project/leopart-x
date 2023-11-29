@@ -10,11 +10,11 @@
 #include "external/quadprog_mdspan/QuadProg++.hh"
 #include "math.h"
 #include "utils.h"
-// #include "external/quadprog_mdspan/Array.hh"
 
 #include <basix/math.h>
 #include <dolfinx.h>
 #include <iostream>
+
 
 namespace leopart::transfer
 {

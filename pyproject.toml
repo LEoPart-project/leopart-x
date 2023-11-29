@@ -1,0 +1,14 @@
+[build-system]
+requires = ["scikit-build-core[pyproject]", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "leopart"
+version = "0.7.2"
+requires-python = ">=3.8.0"
+
+[tool.scikit-build]
+wheel.packages = ["leopart"]
+sdist.exclude = ["*.cpp", "*.h", "*.cc", "*.hh", "*.txt"]
+cmake.verbose = true
+logging.level = "INFO"

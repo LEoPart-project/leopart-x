@@ -3,11 +3,12 @@
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
+#pragma once
+
 #include <vector>
 #include <string>
 #include <span>
 
-#pragma once
 
 namespace leopart
 {

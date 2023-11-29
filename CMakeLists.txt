@@ -5,56 +5,40 @@
 
 cmake_minimum_required(VERSION 3.19)
 
-set(PROJECT_NAME leopart)
-project(${PROJECT_NAME} VERSION "0.7.0")
+project(cpp VERSION "0.7.2")
 
-set(PY_PROJECT_NAME cpp)
+find_package(DOLFINX REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(pybind11 CONFIG REQUIRED)
 
-# Get DOLFINX configuration data (DOLFINXConfig.cmake must be in
-# DOLFINX_CMAKE_CONFIG_PATH)
-if (NOT TARGET dolfinx)
-  find_package(DOLFINX REQUIRED)
-endif()
-
-# Source directories
-set(LEOPART_DIRS
-    leopart/cpp/external)
-
-# Executable
-add_library(
-  ${PROJECT_NAME} SHARED
+pybind11_add_module(
+  ${PROJECT_NAME} MODULE
+  leopart/cpp/wrapper.cpp
   leopart/cpp/Particles.cpp)
 
-# Add source to leopart target, and get sets of header files
-foreach(DIR ${LEOPART_DIRS})
-  add_subdirectory(${DIR})
-endforeach()
+target_link_libraries(${PROJECT_NAME} PUBLIC dolfinx)
+target_compile_options(
+  ${PROJECT_NAME} PRIVATE
+  # -Wno-comment
+  # -Wall
+  # -Wextra
+  # -pedantic
+  # -Werror
+  -Wfatal-errors
+  )
 
 target_include_directories(
   ${PROJECT_NAME} PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>/leopart/cpp")
 
-# Target libraries and compiler options
-target_link_libraries(${PROJECT_NAME} dolfinx)
-target_compile_options(
-  ${PROJECT_NAME} PRIVATE
-  -Wno-comment
-  -Wall
-  -Wextra
-  -pedantic
-  -Werror
-  -Wfatal-errors
-  )
+set(LEOPART_DIRS
+    leopart/cpp/external)
+foreach(DIR ${LEOPART_DIRS})
+  add_subdirectory(${DIR})
+endforeach()
 
-# Headers are not being installed
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
-find_package(pybind11 CONFIG REQUIRED)
-
-pybind11_add_module(${PY_PROJECT_NAME} MODULE leopart/cpp/wrapper.cpp)
-
-# Add DOLFINx libraries.
-target_link_libraries(${PY_PROJECT_NAME} PUBLIC dolfinx ${PROJECT_NAME})
-
-# Set C++20 standard
+# Set C++23 standard
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
-target_compile_features(${PY_PROJECT_NAME} PRIVATE cxx_std_23)
+
+set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+install(TARGETS ${PROJECT_NAME} DESTINATION leopart)
