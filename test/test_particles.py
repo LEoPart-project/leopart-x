@@ -1,6 +1,7 @@
 import numpy as np
-import leopart.cpp as pyleopart
 import pytest
+
+import leopart.cpp as pyleopart
 
 
 def test_empty_create():

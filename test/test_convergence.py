@@ -1,11 +1,11 @@
+from mpi4py import MPI
+
+import numpy as np
 import pytest
 
 import dolfinx
-import ufl
-from mpi4py import MPI
-import numpy as np
 import leopart.cpp as pyleopart
-
+import ufl
 
 tableaus = [
     pyleopart.tableaus.order2.generic_alpha(0.5),

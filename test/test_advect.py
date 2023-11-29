@@ -1,9 +1,10 @@
-import pytest
-import numpy as np
-import leopart.cpp as pyleopart
 from mpi4py import MPI
-import dolfinx
 
+import numpy as np
+import pytest
+
+import dolfinx
+import leopart.cpp as pyleopart
 
 tableaus = [
     pyleopart.tableaus.order1.forward_euler(),

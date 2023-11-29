@@ -3,16 +3,17 @@
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
+import pathlib
 import typing
+import xml.etree.ElementTree as ET
 
 from mpi4py import MPI
-import pathlib
+
+import adios2
 import numpy as np
 import numpy.typing
-import adios2
-import xml.etree.ElementTree as ET
-import dolfinx
 
+import dolfinx
 import leopart.cpp
 
 

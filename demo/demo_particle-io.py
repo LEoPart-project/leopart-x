@@ -3,13 +3,14 @@
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
-import numpy as np
-import leopart.cpp as pyleopart
 from mpi4py import MPI
-import dolfinx
-import adios2
-import leopart.io
 
+import adios2
+import numpy as np
+
+import dolfinx
+import leopart.cpp as pyleopart
+import leopart.io
 
 mesh = dolfinx.mesh.create_rectangle(
     MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [32, 32],

@@ -1,8 +1,10 @@
-import dolfinx
 from mpi4py import MPI
+
 import numpy as np
-import leopart.cpp as pyleopart
 import pytest
+
+import dolfinx
+import leopart.cpp as pyleopart
 import ufl
 
 

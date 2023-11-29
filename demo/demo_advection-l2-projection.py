@@ -3,10 +3,12 @@
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
-import numpy as np
-import leopart.cpp as pyleopart
 from mpi4py import MPI
+
+import numpy as np
+
 import dolfinx
+import leopart.cpp as pyleopart
 import ufl
 
 

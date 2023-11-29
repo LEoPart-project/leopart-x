@@ -1,8 +1,10 @@
-import pytest
-import numpy as np
-import leopart.cpp as pyleopart
 from mpi4py import MPI
+
+import numpy as np
+import pytest
+
 import dolfinx
+import leopart.cpp as pyleopart
 
 
 def create_mesh(cell_type, dtype, n):
