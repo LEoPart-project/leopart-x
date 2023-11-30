@@ -1,0 +1,73 @@
+[build-system]
+requires = ["scikit-build-core[pyproject]", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "leopart"
+version = "0.7.2"
+requires-python = ">=3.8.0"
+
+[tool.scikit-build]
+wheel.packages = ["leopart"]
+sdist.exclude = ["*.cpp", "*.h", "*.cc", "*.hh", "*.txt"]
+cmake.verbose = true
+logging.level = "INFO"
+build-dir = "./build"
+
+[tool.ruff]
+line-length = 80
+indent-width = 4
+
+[tool.ruff.lint]
+extend-select = [
+  "A",
+  "E",
+  "W",
+  "Q",           # flake8-quotes
+  "CPY",         # flake8-copyright
+  "DTZ",         # flake8-datetimez
+#  "B",           # flake8-bugbear
+  "I",           # isort
+#  "ARG",         # flake8-unused-arguments
+  "C4",          # flake8-comprehensions
+  "EM",          # flake8-errmsg
+  "ICN",         # flake8-import-conventions
+  "G",           # flake8-logging-format
+  "PGH",         # pygrep-hooks
+  "PIE",         # flake8-pie
+  "PYI",         # flake8-pyi
+#  "SLF",         # flake8-self
+#  "PL",          # pylint
+  "PT",          # flake8-pytest-style
+  "PTH",         # flake8-use-pathlib
+  "RSE",         # flake8-raise
+  "RET",         # flake8-return
+  "RUF",         # Ruff-specific
+  "SIM",         # flake8-simplify
+#  "T20",         # flake8-print
+  "UP",          # pyupgrade
+  "YTT",         # flake8-2020
+  "EXE",         # flake8-executable
+  "NPY",         # NumPy specific rules
+  "PD",          # pandas-vet
+  "ISC",         # flake8-implicit-str-concat
+  "SLOT",        # flake8-slots
+  "TID",         # flake8-tidy-imports
+  "TCH",         # flake8-type-checking
+  "INT",         # flake8-gettext
+  "TD",          # flake8-todos
+  "FIX",         # flake8-fixme
+  "ERA",         # eradicate
+]
+ignore = [
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["basix", "dolfinx", "ffcx", "ufl"]
+known-third-party = ["gmsh", "numba", "numpy", "pytest", "pyvista"]
+section-order = [
+  "future", "standard-library", "mpi", "third-party", "first-party",
+  "local-folder"]
+
+[tool.ruff.lint.isort.sections]
+"mpi" = ["mpi4py", "petsc4py"]

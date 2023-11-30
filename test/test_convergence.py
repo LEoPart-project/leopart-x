@@ -1,11 +1,16 @@
+# Copyright (c) 2023 Nathan Sime
+# This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+# License: GNU Lesser GPL version 3 or any later version
+# SPDX-License-Identifier:    LGPL-3.0-or-later
+
+from mpi4py import MPI
+
+import numpy as np
 import pytest
 
 import dolfinx
-import ufl
-from mpi4py import MPI
-import numpy as np
 import leopart.cpp as pyleopart
-
+import ufl
 
 tableaus = [
     pyleopart.tableaus.order2.generic_alpha(0.5),
@@ -31,7 +36,7 @@ def create_mesh(cell_type, dtype, n):
 
     cell_dim = dolfinx.mesh.cell_dim(cell_type)
     return mesh_fn[cell_dim](MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]],
-                             [n]*cell_dim, cell_type=cell_type, dtype=dtype)
+                             [n] * cell_dim, cell_type=cell_type, dtype=dtype)
 
 
 @pytest.mark.parametrize("tableau", tableaus)
@@ -41,7 +46,6 @@ def test_l2_project_convergence(tableau, dtype, cell_type):
     # Advect particles through velocity field until t = t_max / 2 at
     # which time the velocity field is reversed until t = t_max, returning
     # particles to their original positions.
-    seed = 1
 
     def u_f(x):
         return np.stack((x[1] * (1 - x[0] ** 2), -x[0] * (1 - x[1] ** 2)))
@@ -56,7 +60,7 @@ def test_l2_project_convergence(tableau, dtype, cell_type):
     mesh = create_mesh(cell_type, dtype, 8)
     dt_vals = t_max / n_steps_vals
     for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
-        xp, p2cell = pyleopart.mesh_fill(mesh._cpp_object, 15, seed)
+        xp, p2cell = pyleopart.mesh_fill(mesh._cpp_object, 15, seed=1)
         xp = np.c_[xp, np.zeros_like(xp[:, 0])]
         ptcls = pyleopart.Particles(xp, p2cell)
         tableau.check_and_create_fields(ptcls)

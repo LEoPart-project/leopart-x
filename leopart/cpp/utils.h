@@ -1,4 +1,4 @@
-// Copyright: (c) 2020-2023 Chris Richardson, Jakob Maljaars and Nathan Sime
+// Copyright (c) 2020-2023 Chris Richardson, Jakob Maljaars and Nathan Sime
 // This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
@@ -22,7 +22,7 @@ using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
 /// MPI rank on MPI_COMM_WORLD
 ///
 /// @param str Message to print
-void print(const std::string str)
+inline void print(const std::string str)
 {
   const int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
   const std::string msg = "[" + std::to_string(rank) + "]: " + str;
@@ -44,7 +44,7 @@ void print_mdspan(
     msg += "\n";
   }
   std::cout << msg << std::endl << std::flush;
-};
+}
 
 /// Format and print 
 void print_iterable(
@@ -55,7 +55,7 @@ void print_iterable(
   for (const auto& item: span)
     msg += std::to_string(item) + ", ";
   std::cout << msg << std::endl << std::flush;
-};
+}
 
 
 /// Adapted from dolfinx_mpc::utils::evaluate_basis_functions

@@ -1,4 +1,4 @@
-// Copyright: (c) 2020-2023 Chris Richardson, Jakob Maljaars and Nathan Sime
+// Copyright (c) 2020-2023 Chris Richardson, Jakob Maljaars and Nathan Sime
 // This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
@@ -10,11 +10,11 @@
 #include "external/quadprog_mdspan/QuadProg++.hh"
 #include "math.h"
 #include "utils.h"
-// #include "external/quadprog_mdspan/Array.hh"
 
 #include <basix/math.h>
 #include <dolfinx.h>
 #include <iostream>
+
 
 namespace leopart::transfer
 {

@@ -1,9 +1,15 @@
-import pytest
-import numpy as np
-import leopart.cpp as pyleopart
-from mpi4py import MPI
-import dolfinx
+# Copyright (c) 2023 Nathan Sime
+# This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+# License: GNU Lesser GPL version 3 or any later version
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
+from mpi4py import MPI
+
+import numpy as np
+import pytest
+
+import dolfinx
+import leopart.cpp as pyleopart
 
 tableaus = [
     pyleopart.tableaus.order1.forward_euler(),
@@ -89,9 +95,9 @@ def test_tableau_check_and_create_fields(gdim, tableau):
         mesh = dolfinx.mesh.create_unit_cube(
             MPI.COMM_WORLD, 4, 4, 4)
 
-    xp, p2c = pyleopart.mesh_fill(mesh._cpp_object, 1)
+    xp, p2c = pyleopart.mesh_fill(mesh._cpp_object, 1, seed=1)
     if gdim == 2:
-        xp = np.c_[xp, np.zeros_like(xp[:,0])]
+        xp = np.c_[xp, np.zeros_like(xp[:, 0])]
     ptcls = pyleopart.Particles(xp, p2c)
 
     tableau.check_and_create_fields(ptcls)

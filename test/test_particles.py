@@ -1,6 +1,12 @@
+# Copyright (c) 2023 Nathan Sime
+# This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+# License: GNU Lesser GPL version 3 or any later version
+# SPDX-License-Identifier:    LGPL-3.0-or-later
+
 import numpy as np
-import leopart.cpp as pyleopart
 import pytest
+
+import leopart.cpp as pyleopart
 
 
 def test_empty_create():
@@ -21,13 +27,13 @@ def test_simple_create():
 
 def test_add_field():
     n = 20
-    x = np.random.rand(n, 3)
-    p = pyleopart.Particles(x, [0]*n)
+    x = np.random.default_rng().random((n, 3))
+    p = pyleopart.Particles(x, [0] * n)
     c2p = p.cell_to_particle()
     assert len(c2p[0]) == n
     p.add_field("w", [3])
     assert p.field("w").value_shape == [3]
-    p.add_field("u", [3, 2])   
+    p.add_field("u", [3, 2])
     u = p.field("u")
     assert u.value_shape == [3, 2]
     assert u.value_size == 6
@@ -41,9 +47,9 @@ def test_add_delete_particles():
     x = np.arange(n * dim, dtype=np.float64).reshape((-1, dim))
     x2c = np.arange(x.shape[0], dtype=np.int32)
     p = pyleopart.Particles(x, x2c)
-    
+
     # Add to cell 12
-    x = np.random.rand(3)
+    x = np.random.default_rng().random(3)
     new_pidx = p.add_particle(x, 12)
     assert len(p.particle_to_cell()) == n + 1
     assert new_pidx == n
