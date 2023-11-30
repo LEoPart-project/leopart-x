@@ -1,11 +1,13 @@
-# Copyright (C) The DOLFINX authors
+# Copyright (C) 2023 The DOLFINX authors
 #
 # This file is part of DOLFINX (https://www.fenicsproject.org)
 #
 # SPDX-License-Identifier:    LGPL-3.0-or-later
+#
+# Modified 2023 by Nathan Sime
 
 import gc
-import os
+import pathlib
 import shutil
 import time
 from collections import defaultdict
@@ -39,18 +41,6 @@ def pytest_runtest_setup(item):
         pytest.skip("This test should only be run in serial")
 
 
-@pytest.fixture(scope="module")
-def datadir(request):
-    """Return the directory of the shared test data. Assumes run from
-    within repository filetree."""
-    d = os.path.dirname(os.path.abspath(request.module.__file__))
-    t = os.path.join(d, "data")
-    while not os.path.isdir(t):
-        d, t = os.path.split(d)
-        t = os.path.join(d, "data")
-    return t
-
-
 def _worker_id(request):
     """Returns thread id when running with pytest-xdist in parallel."""
     try:
@@ -62,18 +52,18 @@ def _worker_id(request):
 def _create_tempdir(request):
     # Get directory name of test_foo.py file
     testfile = request.module.__file__
-    testfiledir = os.path.dirname(os.path.abspath(testfile))
+    testfiledir = pathlib.Path(testfile).resolve().parent
 
     # Construct name test_foo_tempdir from name test_foo.py
-    testfilename = os.path.basename(testfile)
+    testfilename = pathlib.Path(testfile).name
     outputname = testfilename.replace(".py", f"_tempdir_{_worker_id(request)}")
 
     # Get function name test_something from test_foo.py
     function = request.function.__name__
 
     # Join all of these to make a unique path for this test function
-    basepath = os.path.join(testfiledir, outputname)
-    path = os.path.join(basepath, function)
+    basepath = testfiledir / outputname
+    path = basepath / function
 
     # Add a sequence number to avoid collisions when tests are otherwise
     # parameterized
@@ -85,7 +75,7 @@ def _create_tempdir(request):
         sequencenumber = None
 
     sequencenumber = comm.bcast(sequencenumber)
-    path += "__" + str(sequencenumber)
+    path = path.parent / (path.name + "__" + str(sequencenumber))
 
     # Delete and re-create directory on root node
     if comm.rank == 0:
@@ -93,28 +83,29 @@ def _create_tempdir(request):
         # new
         if basepath not in _create_tempdir._basepaths:
             _create_tempdir._basepaths.add(basepath)
-            if os.path.exists(basepath):
+            if basepath.exists():
                 shutil.rmtree(basepath)
             # Make sure we have the base path test_foo_tempdir for this
             # test_foo.py file
-            if not os.path.exists(basepath):
-                os.mkdir(basepath)
+            if not basepath.exists():
+                basepath.mkdir()
 
         # Delete path from old test run
-        if os.path.exists(path):
+        if path.exists():
             shutil.rmtree(path)
         # Make sure we have the path for this test execution: e.g.
         # test_foo_tempdir/test_something__3
-        if not os.path.exists(path):
-            os.mkdir(path)
+        if not path.exists():
+            path.mkdir()
 
         # Wait until the above created the directory
         waited = 0
-        while not os.path.exists(path):
+        while not path.exists():
             time.sleep(0.1)
             waited += 0.1
             if waited > 1:
-                raise RuntimeError(f"Unable to create test directory {path}")
+                msg = f"Unable to create test directory {path}"
+                raise RuntimeError(msg)
 
     comm.Barrier()
 
@@ -122,11 +113,11 @@ def _create_tempdir(request):
 
 
 # Assigning a function member variables is a bit of a nasty hack
-_create_tempdir._sequencenumber = defaultdict(int)  # type: ignore
-_create_tempdir._basepaths = set()  # type: ignore
+_create_tempdir._sequencenumber = defaultdict(int)
+_create_tempdir._basepaths = set()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def tempdir(request):
     """Return a unique directory name for this test function instance.
 

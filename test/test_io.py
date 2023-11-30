@@ -15,6 +15,9 @@ import leopart.cpp as pyleopart
 import leopart.io
 
 
+def create(datadir):
+    datadir.mkdir()
+
 def test_xdmf_output(tempdir):
     mesh = dolfinx.mesh.create_rectangle(
         MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [4, 4],
