@@ -3,14 +3,16 @@
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
-import numpy as np
-import pytest
-import dolfinx
-from mpi4py import MPI
-import adios2
 import pathlib
-import leopart.io
+
+from mpi4py import MPI
+
+import adios2
+import numpy as np
+
+import dolfinx
 import leopart.cpp as pyleopart
+import leopart.io
 
 
 def test_xdmf_output(tmpdir):
