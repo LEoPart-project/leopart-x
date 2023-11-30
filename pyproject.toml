@@ -16,7 +16,7 @@ build-dir = "./build"
 
 [tool.ruff]
 line-length = 80
-tab-size = 4
+indent-width = 4
 
 [tool.ruff.lint]
 extend-select = [
