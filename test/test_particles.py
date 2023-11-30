@@ -27,7 +27,7 @@ def test_simple_create():
 
 def test_add_field():
     n = 20
-    x = np.random.default_rng().rand(n, 3)
+    x = np.random.default_rng().random((n, 3))
     p = pyleopart.Particles(x, [0] * n)
     c2p = p.cell_to_particle()
     assert len(c2p[0]) == n
@@ -49,7 +49,7 @@ def test_add_delete_particles():
     p = pyleopart.Particles(x, x2c)
 
     # Add to cell 12
-    x = np.random.default_rng().rand(3)
+    x = np.random.default_rng().random(3)
     new_pidx = p.add_particle(x, 12)
     assert len(p.particle_to_cell()) == n + 1
     assert new_pidx == n
