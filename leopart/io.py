@@ -59,7 +59,8 @@ class XDMFParticlesFile:
         if self.comm.rank == 0:
             with self.filename.open("w") as outfile:
                 outfile.write(
-                    '<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n')
+                    '<?xml version="1.0"?>\n'
+                    '<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n')
                 outfile.write(ET.tostring(self.xml_doc, encoding="unicode"))
 
     def _append_xml_node(

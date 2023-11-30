@@ -31,7 +31,9 @@ def create_mesh(cell_type, dtype, n):
 def test_relocate_single_particle_per_process(cell_type, dtype):
     mesh = create_mesh(cell_type, dtype, 3)
     interval = np.array([0.0, 1.0])
-    xp_pts = [*[interval] * 2, [0.0]] if mesh.geometry.dim == 2 else [interval] * 3
+    xp_pts = [interval] * mesh.geometry.dim
+    if mesh.geometry.dim == 2:
+        xp_pts = [*xp_pts, [0.0]]
     xp = np.array(np.meshgrid(*xp_pts), dtype=np.double).T.reshape((-1, 3))
 
     bad_cells = np.zeros(xp.shape[0], dtype=np.int32)

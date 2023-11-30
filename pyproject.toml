@@ -14,6 +14,10 @@ cmake.verbose = true
 logging.level = "INFO"
 build-dir = "./build"
 
+[tool.ruff]
+line-length = 80
+tab-size = 4
+
 [tool.ruff.lint]
 extend-select = [
   "A",
