@@ -15,15 +15,15 @@ import leopart.cpp as pyleopart
 import leopart.io
 
 
-def test_xdmf_output(tmpdir):
+def test_xdmf_output(tempdir):
     mesh = dolfinx.mesh.create_rectangle(
-        MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [32, 32],
+        MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [4, 4],
         cell_type=dolfinx.mesh.CellType.triangle)
-    x, p2c = pyleopart.mesh_fill(mesh._cpp_object, 25)
+    x, p2c = pyleopart.mesh_fill(mesh._cpp_object, 5, seed=1)
     x = np.c_[x, np.zeros_like(x[:, 0])]
     ptcls = pyleopart.Particles(x, p2c)
 
-    filename = pathlib.Path(tmpdir) / "example.xdmf"
+    filename = pathlib.Path(tempdir) / "example.xdmf"
     fi = leopart.io.XDMFParticlesFile(
         MPI.COMM_WORLD, filename, adios2.Mode.Write)
 

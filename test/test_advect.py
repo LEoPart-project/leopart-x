@@ -95,7 +95,7 @@ def test_tableau_check_and_create_fields(gdim, tableau):
         mesh = dolfinx.mesh.create_unit_cube(
             MPI.COMM_WORLD, 4, 4, 4)
 
-    xp, p2c = pyleopart.mesh_fill(mesh._cpp_object, 1)
+    xp, p2c = pyleopart.mesh_fill(mesh._cpp_object, 1, seed=1)
     if gdim == 2:
         xp = np.c_[xp, np.zeros_like(xp[:, 0])]
     ptcls = pyleopart.Particles(xp, p2c)

@@ -36,7 +36,7 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
     Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
 
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
-    x, c = pyleopart.mesh_fill(mesh._cpp_object, npart)
+    x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
     p = pyleopart.Particles(x, c)
@@ -73,7 +73,7 @@ def test_transfer_to_function(k, dtype, cell_type, shape):
     Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
 
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
-    x, c = pyleopart.mesh_fill(mesh._cpp_object, npart)
+    x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
     p = pyleopart.Particles(x, c)
@@ -169,7 +169,7 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
             mesh.topology.dim)
         npart = 2 * dofs_per_cell
 
-        x, c = pyleopart.mesh_fill(mesh._cpp_object, npart)
+        x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
         if mesh.geometry.dim == 2:
             x = np.c_[x, np.zeros_like(x[:, 0])]
         p = pyleopart.Particles(x, c)
