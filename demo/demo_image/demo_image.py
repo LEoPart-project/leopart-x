@@ -69,7 +69,7 @@ um = dolfinx.fem.Function(V)
 uth = 0.5 * (uh + um)
 v = ufl.TestFunction(V)
 
-# FE formulation of Peronal Malik model
+# FE formulation of Perona Malik model
 sigma_d0 = dolfinx.fem.Constant(mesh, 0.0)
 pm_d = ufl.exp(
     - ufl.inner(ufl.grad(uth), ufl.grad(uth)) / (2 * sigma_d0**2))
