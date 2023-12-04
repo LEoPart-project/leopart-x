@@ -15,8 +15,6 @@ jobs:
       run: |
         pip3 install ruff
         ruff check --preview .
-    - name: install pybind11
-      run: pip3 install pybind11[global]
     - name: build
       run: pip3 install .
     - name: test serial

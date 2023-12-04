@@ -26,18 +26,10 @@ doxygen
 
 ## Installation
 
-#### C++ library
+#### Install with pip
 
 ```bash
-mkdir src/build
-cd src/build
-cmake .. && make
-```
-
-#### C++ & Python interface via pip
-
-```bash
-cd src && pip3 install .
+pip3 install .
 ```
 
 #### Docker
@@ -45,10 +37,9 @@ cd src && pip3 install .
 Inside a `DOLFINx` Docker container
 
 ```bash
-docker run -ti dolfinx/dolfinx:v0.7.0
-pip3 install pybind11[global]
+docker run -ti dolfinx/dolfinx:v0.7.2
 git clone https://github.com/LEoPart-project/leopart-x.git
-cd leopart-x/src && pip3 install .
+pip3 install ./leopart-x
 ```
 
 ## Citing
