@@ -24,10 +24,12 @@ mesh = dolfinx.mesh.create_unit_square(
 if mesh.comm.rank == 0:
     # "Leopard" by Mark Kent (flamesworddragon) is licensed under CC BY-SA 2.0.
     data = imageio.v2.imread("leopard.jpg")
+    img_size = (data.shape[0], data.shape[1])
     L, H = data.shape[:2]
     x, y = np.meshgrid(np.linspace(0.0, 1.0, L), np.linspace(0.0, 1.0, H))
     xp = np.c_[x.ravel(), y.ravel(), np.zeros_like(x.ravel())]
 else:
+    img_size = None
     xp = np.zeros(0, dtype=np.double)
     data = np.zeros((0, 0, 3), dtype=np.double)
 
@@ -38,7 +40,7 @@ ptcls.add_field("r", [1])
 ptcls.add_field("c", [1])
 if mesh.comm.rank == 0:
     ptcls.field("data").data()[:] = data.reshape((-1, 3))
-    indices = np.indices((150, 150))
+    indices = np.indices(img_size)
     ptcls.field("r").data().T[:] = indices[0].ravel()
     ptcls.field("c").data().T[:] = indices[1].ravel()
 
@@ -168,7 +170,7 @@ def gather_img_rank0(field_name, dtype):
     img = None
     if mesh.comm.rank == 0:
         data = np.concatenate(data)
-        img = np.zeros((150, 150, value_shape[0]), dtype=dtype)
+        img = np.zeros((*img_size, value_shape[0]), dtype=dtype)
         img[r.ravel(), c.ravel(), ...] = data
     return img
 
