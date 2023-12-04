@@ -17,8 +17,7 @@ import ufl
 
 # Initial mesh matches the resolution of the input image
 mesh = dolfinx.mesh.create_unit_square(
-    MPI.COMM_WORLD, 150, 150, cell_type=dolfinx.mesh.CellType.quadrilateral,
-    ghost_mode=dolfinx.mesh.GhostMode.none)
+    MPI.COMM_WORLD, 150, 150, cell_type=dolfinx.mesh.CellType.quadrilateral)
 
 # Load the data on rank 0
 if mesh.comm.rank == 0:
@@ -132,6 +131,7 @@ snapshot_interval = 2
 # Transfer discrete initial data to FE continuum
 pyleopart.transfer_to_function(
     u_img._cpp_object, ptcls, ptcls.field(noise_label))
+u_img.x.scatter_forward()
 uh.interpolate(u_img)
 uh.x.scatter_forward()
 
