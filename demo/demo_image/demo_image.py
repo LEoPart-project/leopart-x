@@ -1,22 +1,28 @@
+# Copyright (c) 2023 Nathan Sime
+# This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
+# License: GNU Lesser GPL version 3 or any later version
+# SPDX-License-Identifier:    LGPL-3.0-or-later
+
+from mpi4py import MPI
+from petsc4py import PETSc
+
 import imageio
+import matplotlib.pyplot as plt
 import numpy as np
+
 import dolfinx
 import dolfinx.nls.petsc
-from mpi4py import MPI
 import leopart.cpp as pyleopart
-import matplotlib.pyplot as plt
 import ufl
 
-# Initial mesh matches the resolution of the input imgage
+# Initial mesh matches the resolution of the input image
 mesh = dolfinx.mesh.create_unit_square(
     MPI.COMM_WORLD, 150, 150, cell_type=dolfinx.mesh.CellType.quadrilateral)
 
 # Load the data on rank 0
 if mesh.comm.rank == 0:
-    # Image: https://www.flickr.com/photos/61027726@N06/5558338829
-    # https://openverse.org/image/7abac9f4-fadb-4de2-a182-680d006e4404?q=leopard
-    # "Snow Leopard" by Sideshow_Matt is licensed under CC BY 2.0.
-    data = imageio.v2.imread("leopard2.jpg")
+    # "Leopard" by Mark Kent (flamesworddragon) is licensed under CC BY-SA 2.0.
+    data = imageio.v2.imread("leopard.jpg")
     L, H = data.shape[:2]
     x, y = np.meshgrid(np.linspace(0.0, 1.0, L), np.linspace(0.0, 1.0, H))
     xp = np.c_[x.ravel(), y.ravel(), np.zeros_like(x.ravel())]
@@ -69,7 +75,6 @@ solver = dolfinx.nls.petsc.NewtonSolver(MPI.COMM_WORLD, problem)
 solver.max_it = 10
 solver.rtol = 1e-5
 
-from petsc4py import PETSc
 ksp = solver.krylov_solver
 opts = PETSc.Options()
 option_prefix = ksp.getOptionsPrefix()
@@ -80,7 +85,7 @@ ksp.setFromOptions()
 
 # Utility functions for storing snapshot data
 def create_timestamp(t):
-    return f"$t={t:.3e}$"
+    return f"t={t:.2e}"
 
 
 def record_snapshot(name):
@@ -91,7 +96,8 @@ def record_snapshot(name):
     pmd_name = "pmd_" + name
     pmd_dg0.interpolate(pmd_expr)
     ptcls.add_field(pmd_name, uh.ufl_shape)
-    pyleopart.transfer_to_particles(ptcls, ptcls.field(pmd_name), pmd_dg0._cpp_object)
+    pyleopart.transfer_to_particles(
+        ptcls, ptcls.field(pmd_name), pmd_dg0._cpp_object)
 
 
 # Adaptive time stepping parameters
@@ -112,7 +118,8 @@ t_snapshots = []
 snapshot_interval = 2
 
 # Transfer discrete initial data to FE continuum
-pyleopart.transfer_to_function(u_img._cpp_object, ptcls, ptcls.field(noise_label))
+pyleopart.transfer_to_function(
+    u_img._cpp_object, ptcls, ptcls.field(noise_label))
 uh.interpolate(u_img)
 
 # Main loop
@@ -137,19 +144,22 @@ for n in range(max_steps):
 
 # Plot results
 n_figs = len(t_snapshots) + 1
-fig, axs = plt.subplots(2, n_figs, figsize=(16, 2 * 16/n_figs))
-data_gray = ptcls.field("gray").data().reshape(data[:,:,0].shape)
-axs[0,0].imshow(data_gray, "gray")
-axs[0,0].set_title("Original grayscale")
-axs[1,0].imshow(
-    ptcls.field(noise_label).data().reshape(data[:,:,0].shape), "gray")
-axs[1,0].set_title("Noisy grayscale")
+fig, axs = plt.subplots(2, n_figs, figsize=(16, 2 * 16 / n_figs))
+data_gray = ptcls.field("gray").data().reshape(data[:, :, 0].shape)
+axs[0, 0].imshow(data_gray, "gray")
+axs[0, 0].set_title("Original grayscale")
+axs[1, 0].imshow(
+    ptcls.field(noise_label).data().reshape(data[:, :, 0].shape), "gray")
+axs[1, 0].set_title("Noisy grayscale")
 for i, t in enumerate(t_snapshots):
-    axs[0,i+1].imshow(ptcls.field(
-        "u_" + create_timestamp(t)).data().reshape(data[:,:,0].shape), "gray")
-    axs[1,i+1].imshow(ptcls.field(
-        "pmd_" + create_timestamp(t)).data().reshape(data[:,:,0].shape), "gray")
-    axs[0,i+1].set_title(create_timestamp(t))
+    axs[0, i + 1].imshow(
+        ptcls.field("u_" + create_timestamp(t)).data().reshape(
+            data[:, :, 0].shape), "gray")
+    axs[0, i + 1].set_title(f"u({create_timestamp(t)})")
+    axs[1, i + 1].imshow(
+        ptcls.field("pmd_" + create_timestamp(t)).data().reshape(
+            data[:, :, 0].shape), "gray")
+    axs[1, i + 1].set_title(rf"$A(\nabla u, {create_timestamp(t)})$")
 
 for ax in axs.ravel():
     ax.axis("off")
