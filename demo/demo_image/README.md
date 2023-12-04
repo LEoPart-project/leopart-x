@@ -2,7 +2,7 @@ The file `leopard.jpg` employed in the demo `demo_image.py`.
 
 ![Leopard Image](leopard.jpg)
 
-"Snow Leopard" by Sideshow_Matt is licensed under CC BY 2.0.
+"Leopard" by Mark Kent (flamesworddragon) is licensed under CC BY-SA 2.0.
 
-* [Flickr](https://www.flickr.com/photos/61027726@N06/5558338829)
-* [openverse](https://openverse.org/image/7abac9f4-fadb-4de2-a182-680d006e4404?q=leopard)
+* [Flickr](https://www.flickr.com/photos/31343702@N06/5710239437)
+* [openverse](https://openverse.org/image/94b35018-0cb0-4639-9dda-83e9b052c403?q=leopard)
