@@ -17,7 +17,8 @@ import ufl
 
 # Initial mesh matches the resolution of the input image
 mesh = dolfinx.mesh.create_unit_square(
-    MPI.COMM_WORLD, 150, 150, cell_type=dolfinx.mesh.CellType.quadrilateral)
+    MPI.COMM_WORLD, 150, 150, cell_type=dolfinx.mesh.CellType.quadrilateral,
+    ghost_mode=dolfinx.mesh.GhostMode.none)
 
 # Load the data on rank 0
 if mesh.comm.rank == 0:
@@ -32,20 +33,29 @@ else:
 
 p2c = [0] * xp.shape[0]
 ptcls = pyleopart.Particles(xp, p2c)
+ptcls.add_field("data", [3])
+ptcls.add_field("r", [1])
+ptcls.add_field("c", [1])
+if mesh.comm.rank == 0:
+    ptcls.field("data").data()[:] = data.reshape((-1, 3))
+    indices = np.indices((150, 150))
+    ptcls.field("r").data().T[:] = indices[0].ravel()
+    ptcls.field("c").data().T[:] = indices[1].ravel()
+
+# Distribute data across processes
+ptcls.relocate_bbox(mesh._cpp_object, np.arange(len(p2c)))
 
 # Compute grayscale of data and add artificial noise
 gray_label = "gray"
 noise_label = "noise"
 ptcls.add_field(gray_label, [1])
 ptcls.add_field(noise_label, [1])
-if mesh.comm.rank == 0:
-    grayscale = np.dot(data[..., :3], [0.299, 0.587, 0.114]).ravel() / 255.0
-    noise = np.random.default_rng(1).normal(0.0, 0.05, grayscale.shape)
-    ptcls.field(gray_label).data().T[:] = grayscale
-    ptcls.field(noise_label).data().T[:] = np.clip(grayscale + noise, 0.0, 1.0)
 
-# Distribute data across processes
-ptcls.relocate_bbox(mesh._cpp_object, np.arange(len(p2c)))
+ptcl_data = ptcls.field("data").data()
+grayscale = np.dot(ptcl_data, np.array([0.299, 0.587, 0.114])) / 255.0
+noise = np.random.default_rng(1).normal(0.0, 0.05, grayscale.shape)
+ptcls.field(gray_label).data().T[:] = grayscale
+ptcls.field(noise_label).data().T[:] = np.clip(grayscale + noise, 0.0, 1.0)
 
 # DG0 continuum for image data
 DG0 = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
@@ -90,12 +100,12 @@ def create_timestamp(t):
 
 def record_snapshot(name):
     uname = "u_" + name
-    ptcls.add_field(uname, uh.ufl_shape)
+    ptcls.add_field(uname, [1])
     pyleopart.transfer_to_particles(ptcls, ptcls.field(uname), uh._cpp_object)
 
     pmd_name = "pmd_" + name
     pmd_dg0.interpolate(pmd_expr)
-    ptcls.add_field(pmd_name, uh.ufl_shape)
+    ptcls.add_field(pmd_name, [1])
     pyleopart.transfer_to_particles(
         ptcls, ptcls.field(pmd_name), pmd_dg0._cpp_object)
 
@@ -121,6 +131,7 @@ snapshot_interval = 2
 pyleopart.transfer_to_function(
     u_img._cpp_object, ptcls, ptcls.field(noise_label))
 uh.interpolate(u_img)
+uh.x.scatter_forward()
 
 # Main loop
 for n in range(max_steps):
@@ -132,37 +143,61 @@ for n in range(max_steps):
         dt_new = dt_scl * dt.value * (du_max / (euler_o * du))
         dt_new = min(max(dt_new, dt_min), dt_max)
         dt.value = dt_new
-        PETSc.Sys.Print(f"Adapting time step: step={n}, dt={dt.value:.3e}")
+        PETSc.Sys.Print(
+            f"Adapting time step: step={n}, dt={dt.value:.3e}, t={t:.3e}")
 
     # Solve system
     t += dt.value
     um.x.array[:] = uh.x.array
+    um.x.scatter_forward()
     solver.solve(uh)
     if n % snapshot_interval == 0 or n == max_steps - 1:
         record_snapshot(create_timestamp(t))
         t_snapshots += [t]
 
+# Gather data on process 0
+r = mesh.comm.gather(ptcls.field("r").data())
+c = mesh.comm.gather(ptcls.field("c").data())
+if mesh.comm.rank == 0:
+    r, c = (np.asarray(np.concatenate(x), dtype=int) for x in (r, c))
+
+
+def gather_img_rank0(field_name, dtype):
+    value_shape = ptcls.field(field_name).value_shape
+    data = mesh.comm.gather(ptcls.field(field_name).data())
+    img = None
+    if mesh.comm.rank == 0:
+        data = np.concatenate(data)
+        img = np.zeros((150, 150, value_shape[0]), dtype=dtype)
+        img[r.ravel(), c.ravel(), ...] = data
+    return img
+
+
+img_gray = gather_img_rank0(gray_label, dtype=np.double)
+img_gray_noise = gather_img_rank0(noise_label, dtype=np.double)
+img_tstep_gray = [gather_img_rank0("u_" + create_timestamp(t), dtype=np.double)
+                  for t in t_snapshots]
+img_tstep_pmd = [gather_img_rank0("pmd_" + create_timestamp(t), dtype=np.double)
+                  for t in t_snapshots]
+
 # Plot results
-n_figs = len(t_snapshots) + 1
-fig, axs = plt.subplots(2, n_figs, figsize=(16, 2 * 16 / n_figs))
-data_gray = ptcls.field("gray").data().reshape(data[:, :, 0].shape)
-axs[0, 0].imshow(data_gray, "gray")
-axs[0, 0].set_title("Original grayscale")
-axs[1, 0].imshow(
-    ptcls.field(noise_label).data().reshape(data[:, :, 0].shape), "gray")
-axs[1, 0].set_title("Noisy grayscale")
-for i, t in enumerate(t_snapshots):
-    axs[0, i + 1].imshow(
-        ptcls.field("u_" + create_timestamp(t)).data().reshape(
-            data[:, :, 0].shape), "gray")
-    axs[0, i + 1].set_title(f"u({create_timestamp(t)})")
-    axs[1, i + 1].imshow(
-        ptcls.field("pmd_" + create_timestamp(t)).data().reshape(
-            data[:, :, 0].shape), "gray")
-    axs[1, i + 1].set_title(rf"$A(\nabla u, {create_timestamp(t)})$")
+if mesh.comm.rank == 0:
+    n_figs = len(t_snapshots) + 1
+    fig, axs = plt.subplots(2, n_figs, figsize=(16, 2 * 16 / n_figs))
+    axs[0, 0].imshow(img_gray, "gray")
+    axs[0, 0].set_title("Original grayscale")
+    axs[1, 0].imshow(img_gray_noise, "gray")
+    axs[1, 0].set_title("Noisy grayscale")
 
-for ax in axs.ravel():
-    ax.axis("off")
+    for i, t in enumerate(t_snapshots):
+        axs[0, i + 1].imshow(img_tstep_gray[i], "gray")
+        axs[0, i + 1].set_title(f"u({create_timestamp(t)})")
 
-plt.tight_layout()
-plt.show()
+        axs[1, i + 1].imshow(img_tstep_pmd[i], "gray")
+        axs[1, i + 1].set_title(rf"$A(\nabla u, {create_timestamp(t)})$")
+
+    for ax in axs.ravel():
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.show()
