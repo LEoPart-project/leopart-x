@@ -63,7 +63,6 @@ mesh_fill(
   
   // Geometric dimension
   const std::size_t gdim = mesh.geometry().dim();
-  const int tdim = mesh.topology()->dim();
 
   // Get coordinate map
   if (mesh.geometry().cmaps().size() > 1)
@@ -195,7 +194,7 @@ std::vector<T> random_reference_tetrahedron(
   std::mt19937 rgen(seed);
   std::uniform_real_distribution<T> dist(-1.0, 1.0);
 
-  for (int i = 0; i < n; ++i)
+  for (std::size_t i = 0; i < n; ++i)
   {
     std::generate(r.begin(), r.end(),
                   [&dist, &rgen]() { return dist(rgen); });
@@ -222,7 +221,7 @@ std::vector<T> random_reference_tetrahedron(
     }
 
     const auto p_row = &p[i * gdim];
-    for (int j = 0; j < gdim; ++j)
+    for (std::size_t j = 0; j < gdim; ++j)
       p_row[j] += r[j];
   }
 

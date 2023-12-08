@@ -19,11 +19,11 @@ pybind11_add_module(
 target_link_libraries(${PROJECT_NAME} PUBLIC dolfinx)
 target_compile_options(
   ${PROJECT_NAME} PRIVATE
-  # -Wno-comment
-  # -Wall
-  # -Wextra
-  # -pedantic
-  # -Werror
+  -Wno-comment
+  -Wall
+  -Wextra
+  -pedantic
+  -Werror
   -Wfatal-errors
   )
 

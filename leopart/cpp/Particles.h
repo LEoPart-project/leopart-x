@@ -9,6 +9,7 @@
 #include <vector>
 #include <stdexcept>
 #include <map>
+#include <ranges>
 
 
 namespace dolfinx
@@ -94,16 +95,15 @@ public:
   /// data.
   inline std::vector<std::size_t> active_pidxs()
   {
-    const std::size_t num_pidxs = _particle_to_cell.size();
-    std::vector<std::size_t> valid_pidxs(num_pidxs);
-    std::size_t n_valid_particles = 0;
-    for (std::size_t pidx = 0; pidx < num_pidxs; ++pidx)
-    {
-      if (_particle_to_cell[pidx] != INVALID_CELL)
-        valid_pidxs[n_valid_particles++] = pidx;
-    }
-    valid_pidxs.resize(n_valid_particles);
-    return valid_pidxs;
+    const auto is_pidx_valid =
+      [&invalid_cell=INVALID_CELL, &p2c=_particle_to_cell](
+        const std::size_t& p_idx)
+      {
+        return p2c[p_idx] != invalid_cell;
+      };
+    auto v = std::views::iota((std::size_t) 0, _particle_to_cell.size())
+           | std::views::filter(is_pidx_valid);
+    return std::vector<std::size_t>(v.begin(), v.end());
   }
 
   /// Given a process local particle index, return the owning cell and cell
