@@ -186,10 +186,10 @@ img_tstep_pmd = [gather_img_rank0("pmd_" + create_timestamp(t), dtype=np.double)
 if mesh.comm.rank == 0:
     n_figs = len(t_snapshots) + 1
     fig, axs = plt.subplots(2, n_figs, figsize=(16, 2 * 16 / n_figs))
-    axs[0, 0].imshow(img_gray, "gray")
-    axs[0, 0].set_title("Original grayscale")
-    axs[1, 0].imshow(img_gray_noise, "gray")
-    axs[1, 0].set_title("Noisy grayscale")
+    axs[0, 0].imshow(img_gray_noise, "gray")
+    axs[0, 0].set_title("Noisy grayscale")
+    axs[1, 0].imshow(img_gray, "gray")
+    axs[1, 0].set_title("Original grayscale")
 
     for i, t in enumerate(t_snapshots):
         axs[0, i + 1].imshow(img_tstep_gray[i], "gray")
