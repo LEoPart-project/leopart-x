@@ -61,7 +61,7 @@ PYBIND11_MODULE(cpp, m)
       .def(py::init(
             [](const py::array_t<dtype, py::array::c_style>& px,
                const std::vector<std::int32_t>& p_cells) {
-                if (px.shape(0) != p_cells.size())
+                if ((std::size_t) px.shape(0) != p_cells.size())
                   throw std::invalid_argument(
                     "Number of particles and particle cells should be equivalent");
 
@@ -105,6 +105,13 @@ PYBIND11_MODULE(cpp, m)
               const std::size_t np_per_cell) {
             self.generate_minimum_particles_per_cell(mesh, np_per_cell);
            })
+      .def("active_pidxs",
+           [](Particles<dtype>& self) {
+            const std::vector<std::size_t> pidxs = self.active_pidxs();
+            return py::array_t<std::size_t, py::array::c_style>(
+              pidxs.size(), pidxs.data());
+           },
+           py::return_value_policy::move)
       .def("field_exists", &Particles<dtype>::Particles::field_exists);
 
   // Generation functions

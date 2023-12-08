@@ -260,7 +260,7 @@ void rk(
   dolfinx::common::Timer timer("leopart::advect::rk");
 
   const std::string xn_name = tableau.field_name_xn();
-  const int num_steps = tableau.order;
+  const std::size_t num_steps = tableau.order;
   mdspan_t<const T, 2> a = tableau.a_md();
   const std::vector<T>& b = tableau.b;
   const std::vector<T>& c = tableau.c;

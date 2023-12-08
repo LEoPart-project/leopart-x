@@ -88,8 +88,8 @@ void transfer_to_function_l2_callback(
   // @todo these definitions are legacy DOLFIN and should be refactored for
   // appropriate unrolling of DoFs.
   const int block_size = element->block_size();
-  const int value_size = element->value_size() / block_size;
-  const int space_dimension = element->space_dimension() / block_size;
+  // const int value_size = element->value_size() / block_size;
+  const std::size_t space_dimension = element->space_dimension() / block_size;
 
   std::shared_ptr<const dolfinx::fem::DofMap> dm
       = f->function_space()->dofmap();
@@ -115,10 +115,10 @@ void transfer_to_function_l2_callback(
   //  QT . Q: (space_dimension x space_dimension)
   //  L: (n_p x block_size)
   //  QT . L: (space_dimension x block_size)
-  for (int c = 0; c < ncells; ++c)
+  for (std::int32_t c = 0; c < ncells; ++c)
   {
     const std::vector<std::size_t> cell_particles = cell_to_particle[c];
-    int cell_np = cell_particles.size();
+    const std::size_t cell_np = cell_particles.size();
 
     // Assemble Q
     std::vector<T> Q_T_data(cell_np * space_dimension);
@@ -129,7 +129,7 @@ void transfer_to_function_l2_callback(
     for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
     {
       const std::size_t p_idx = cell_particles[cell_p];
-      for (int i = 0; i < space_dimension; ++i)
+      for (std::size_t i = 0; i < space_dimension; ++i)
         Q(cell_p, i) = basis_evals_md(p_idx, i, 0); // Assume no vector valued basis
     }
     leopart::math::transpose<T>(Q, Q_T);
@@ -157,7 +157,7 @@ void transfer_to_function_l2_callback(
 
     // Populate FE function DoFs
     const auto& dofs = dm->cell_dofs(c);
-    for (int i = 0; i < dofs.size(); ++i)
+    for (std::size_t i = 0; i < dofs.size(); ++i)
       for (int k = 0; k < block_size; ++k)
         expansion_coefficients[dofs[i]*block_size + k] = soln[i*block_size + k];
   }
@@ -230,7 +230,7 @@ void transfer_to_function_constrained(
                              space_dimension * value_size * 2);
   std::vector<T> ce0(0, 0.0), ci0(space_dimension * value_size * 2, 0.0);
 
-  for (std::size_t i = 0; i < space_dimension; i++)
+  for (int i = 0; i < space_dimension; i++)
   {
     CI(i, i) = 1.;
     CI(i, i + space_dimension) = -1;
