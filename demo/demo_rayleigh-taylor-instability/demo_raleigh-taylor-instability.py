@@ -22,13 +22,8 @@ def pprint(*msg, rank=None):
     print(f"[{MPI.COMM_WORLD.rank}]: {' '.join(map(str, msg))}", flush=True)
 
 
-lmbda, H = 0.9142, 1.0
-mesh = dolfinx.mesh.create_rectangle(
-    MPI.COMM_WORLD, [[0.0, 0.0], [lmbda, H]], [40, 40],
-    cell_type=dolfinx.mesh.CellType.triangle,
-    diagonal=dolfinx.mesh.DiagonalType.left_right)
-
 # Parameters
+lmbda, H = 0.9142, 1.0
 p = 2
 A = 0.02
 db = 0.2
@@ -36,6 +31,12 @@ S = db * (1 - db)
 tableau = pyleopart.tableaus.order2.explicit_midpoint()
 t_max = 2000.0
 num_t_steps_max = 200
+
+# Geometry
+mesh = dolfinx.mesh.create_rectangle(
+    MPI.COMM_WORLD, [[0.0, 0.0], [lmbda, H]], [40, 40],
+    cell_type=dolfinx.mesh.CellType.triangle,
+    diagonal=dolfinx.mesh.DiagonalType.left_right)
 
 # Chemistry space
 PHI = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
