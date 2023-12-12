@@ -31,6 +31,43 @@ def create_mesh(cell_type, dtype, n):
                                        dolfinx.mesh.CellType.quadrilateral,
                                        dolfinx.mesh.CellType.hexahedron])
 @pytest.mark.parametrize("shape", [(1,), (2,)])
+def test_find_deficient_cells(k, dtype, cell_type, shape):
+    mesh = create_mesh(cell_type, dtype, 4)
+    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
+
+    npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
+    x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
+    if mesh.geometry.dim == 2:
+        x = np.c_[x, np.zeros_like(x[:, 0])]
+    ptcls = pyleopart.Particles(x, c)
+
+    num_cells = mesh.topology.index_map(mesh.topology.dim).size_local
+    cells_to_cull = [0, num_cells - 1]
+    assert cells_to_cull[0] != cells_to_cull[1]
+
+    num_to_delete = 1
+    for c in cells_to_cull:
+        pidxs = ptcls.cell_to_particle()[c]
+        for _ in range(num_to_delete):
+            ptcls.delete_particle(c, 0)
+        assert len(ptcls.cell_to_particle()[c]) == len(pidxs) - num_to_delete
+
+    u = dolfinx.fem.Function(Q)
+    deficient_cells = pyleopart.find_deficient_cells(u._cpp_object, ptcls)
+
+    cells_to_cull = np.sort(np.array(cells_to_cull, dtype=np.int32))
+    deficient_cells = np.sort(np.array(deficient_cells, dtype=np.int32))
+
+    assert np.all(cells_to_cull == deficient_cells)
+
+
+@pytest.mark.parametrize("k", [1, 2])
+@pytest.mark.parametrize("dtype", [np.float64])
+@pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle,
+                                       dolfinx.mesh.CellType.tetrahedron,
+                                       dolfinx.mesh.CellType.quadrilateral,
+                                       dolfinx.mesh.CellType.hexahedron])
+@pytest.mark.parametrize("shape", [(1,), (2,)])
 def test_transfer_to_particles(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
     Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))

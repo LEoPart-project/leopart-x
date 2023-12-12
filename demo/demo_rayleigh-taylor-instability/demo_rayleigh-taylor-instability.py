@@ -157,6 +157,10 @@ for j in range(num_t_steps_max):
     pyleopart.rk(mesh._cpp_object, ptcls, tableau,
                  velocity, t, dt)
 
+    deficient_cells = pyleopart.find_deficient_cells(phi._cpp_object, ptcls)
+    if len(deficient_cells) > 0:
+        pprint(f"Particle deficient cells found: {deficient_cells}",
+               rank=mesh.comm.rank)
     pyleopart.transfer_to_function(phi._cpp_object, ptcls, ptcls.field("phi"))
     ptcl_file.write_particles(ptcls, t, ["phi"])
     phi_file.write_function(phi, t=t)

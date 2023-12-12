@@ -49,6 +49,50 @@ void transfer_to_particles(const Particles<T>& particles, Field<T>& field,
   f->eval(x, xshape, p2c, u, ushape);
 }
 
+/// Transfer the provided particle field data to the finite element
+/// function using local l_2 projection.
+/// We solve the problem: find \f(u_h \in V\f) such that
+///
+/// \f[
+///    u_h(x_p) v(x_p) = u_p v(x_p) \quad \forall v \in V, \; p = 1,\ldots,n_p.
+/// \f]
+///
+/// Here \f(u_p\f) is the \f(p\f)th particle's data, \f(x_p\f) is the \f(p\f)th
+/// particle's position, \f(n_p\f) is the total number of particles
+/// and \f(V\f) is the function space to which the provided finite element
+/// function belongs.
+///
+/// @tparam T The function scalar type
+/// @tparam U The function geometry type
+/// @param f The finite element function
+/// @param pax The particles collection
+/// @param field The field data to be transferred
+template <dolfinx::scalar T, std::floating_point U>
+std::vector<std::int32_t> find_deficient_cells(
+  std::shared_ptr<dolfinx::fem::Function<T>> f,
+  const Particles<T>& pax)
+{
+  std::shared_ptr<const dolfinx::mesh::Mesh<U>> mesh
+    = f->function_space()->mesh();
+  std::shared_ptr<const dolfinx::fem::FunctionSpace<T>> V
+    = f->function_space();
+  const int tdim = mesh->topology()->dim();
+  std::int32_t ncells = mesh->topology()->index_map(tdim)->size_local();
+  std::shared_ptr<const dolfinx::fem::FiniteElement<T>> element
+    = f->function_space()->element();
+
+  const std::vector<std::vector<std::size_t>>& c2p
+    = pax.cell_to_particle();
+
+  std::vector<std::int32_t> deficient_cells;
+  for (std::int32_t c = 0; c < ncells; ++c)
+  {
+    const std::size_t ncdof = V->dofmap()->cell_dofs(c).size();
+    if (c2p[c].size() < ncdof)
+      deficient_cells.push_back(c);
+  }
+  return deficient_cells;
+}
 
 /// Transfer the provided particle field data to the finite element
 /// function using local l_2 projection. The solve_callback function
@@ -185,6 +229,7 @@ template <dolfinx::scalar T, std::floating_point U>
 void transfer_to_function(std::shared_ptr<dolfinx::fem::Function<T>> f,
                           const Particles<T>& pax, const Field<T>& field)
 {
+  // Simply solve the particle mass matrix / rhs system
   std::function<const std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)>
    solve_function = [](mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
   {
@@ -238,6 +283,7 @@ void transfer_to_function_constrained(
     ci0[i + space_dimension] = u;
   }
 
+  // Solve the  mass matrix / rhs optimisation problem with quadprog
   std::function<std::vector<T>(mdspan_t<T, 2>, mdspan_t<T, 2>)>
     solve_function = [&CE, &ce0, &CI, &ci0](
       mdspan_t<T, 2> QT_Q, mdspan_t<T, 2> QT_L)
