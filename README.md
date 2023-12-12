@@ -44,20 +44,24 @@ pip3 install ./leopart-x
 
 ## Citing
 
-LEoPart has been described and developed in a series of papers:
+LEoPart is described in:
 
 ```
 @article{Maljaars2020,
     author = {Maljaars, Jakob M. and Richardson, Chris N. and Sime, Nathan},
     doi = {10.1016/j.camwa.2020.04.023},
-    issn = {08981221},
-    journal = {Computers and Mathematics with Applications},
-    number = {xxxx},
-    pages = {1--27},
-    title = {{LEOPART: A particle library for FENICS}},
-    year = {2020}
+    issn = {0898-1221},
+    journal = {Computers \& Mathematics with Applications},
+    volume = {81},
+    pages = {289--315},
+    title = {{LEoPart: A particle library for FEniCS}},
+    year = {2021}
 }
+```
 
+LEoPart for use with PDE-constrained projection is described in:
+
+```
 @article{Maljaars2019,
   author = {Maljaars, Jakob M. and Labeur, Robert Jan and Trask, Nathaniel and Sulsky, Deborah},
   doi = {10.1016/J.CMA.2019.01.028},
