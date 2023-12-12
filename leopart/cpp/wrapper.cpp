@@ -168,6 +168,11 @@ PYBIND11_MODULE(cpp, m)
         }, py::return_value_policy::move);
 
   // Transfer functions
+  m.def("find_deficient_cells",
+        [](std::shared_ptr<dolfinx::fem::Function<dtype>> f,
+        const Particles<dtype>& pax){
+          return leopart::transfer::find_deficient_cells<dtype, dtype_geom>(f, pax);
+        });
   m.def("transfer_to_particles", &leopart::transfer::transfer_to_particles<dtype>);
   m.def("transfer_to_function",
         [](std::shared_ptr<dolfinx::fem::Function<dtype>> f,
