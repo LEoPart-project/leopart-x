@@ -3,19 +3,19 @@
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
+import enum
+
 from mpi4py import MPI
 from petsc4py import PETSc
 
 import adios2
 import numpy as np
-import enum
 
 import dolfinx
 import dolfinx.fem.petsc
 import leopart.cpp as pyleopart
 import leopart.io
 import ufl
-
 
 # This demo reproduces the Rayeigh-Taylor instability benchmark exhibited in,
 # for example, van Keken et al. (1997)
