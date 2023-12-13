@@ -274,6 +274,7 @@ void rk(
     // Compute k_s = u(t_n + c_s h, x_n + sum_{i=1}^{s-1} a_{si} k_i h)
     if (s != 0)
     {
+      // a_{si} * k_i * h
       std::span<const T> xn = ptcls.field(xn_name).data();
       std::vector<T> suffix(xn.size(), 0.0);
       for (std::size_t i = 0; i < s; ++i)
@@ -285,6 +286,7 @@ void rk(
           suffix[j] += a_si * ks_data[j] * dt;
       }
       
+      // x_n + a_{si} * k_i * h
       std::span<T> xp = ptcls.x().data();
       for (std::size_t j = 0; j < xp.size(); ++j)
         xp[j] = xn[j] + suffix[j];
@@ -292,7 +294,7 @@ void rk(
       ptcls.relocate_bbox(mesh, ptcls.active_pidxs());
     }
 
-    std::shared_ptr<dolfinx::fem::Function<T>> uh_t = velocity_callback(t + c[s]);
+    std::shared_ptr<dolfinx::fem::Function<T>> uh_t = velocity_callback(t + c[s] * dt);
     leopart::Field<T>& substep_field = ptcls.field(tableau.field_name_substep(s));
     leopart::transfer::transfer_to_particles<T>(ptcls, substep_field, uh_t);
   }
