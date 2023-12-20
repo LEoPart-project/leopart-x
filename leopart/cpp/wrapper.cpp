@@ -193,6 +193,15 @@ PYBIND11_MODULE(cpp, m)
   // Advection functions
   m.def("rk",
         [](
+          Particles<dtype>& ptcls,
+          const leopart::advect::Tableau<dtype>& tableau,
+          std::function<std::shared_ptr<dolfinx::fem::Function<dtype>>(dtype)> velocity_callback,
+          std::function<void(Particles<dtype>&)> relocate_callback,
+          const dtype t, const dtype dt) {
+          leopart::advect::rk(ptcls, tableau, velocity_callback, relocate_callback, t, dt);
+        });
+  m.def("rk",
+        [](
           const dolfinx::mesh::Mesh<dtype_geom>& mesh,
           Particles<dtype>& ptcls,
           const leopart::advect::Tableau<dtype>& tableau,
