@@ -312,4 +312,7 @@ if mesh.comm.rank == 0:
     # Plot u_rms data
     import matplotlib.pyplot as plt
     plt.plot(t_vals, urms_vals)
+    plt.xlabel("$t$")
+    plt.ylabel(r"$u_\mathrm{rms}$")
+    plt.grid("on")
     plt.show()
