@@ -10,6 +10,7 @@ from petsc4py import PETSc
 
 import adios2
 import numpy as np
+import scipy.spatial
 
 import dolfinx
 import dolfinx.fem.petsc
@@ -70,7 +71,7 @@ if mesh0.comm.rank == 0:
               np.linspace(0.0, H, nparts_per_dir),
               [0.0]]
     xp = np.array(np.meshgrid(*xp_pts), dtype=np.double).T.reshape((-1, 3))
-    p2cell = np.array([0]*xp.shape[0], dtype=np.int32)
+    p2cell = np.array([0] * xp.shape[0], dtype=np.int32)
 else:
     xp = np.array([], dtype=np.double)
     p2cell = np.array([], dtype=np.int32)
@@ -116,13 +117,11 @@ def refine_mesh(mesh):
     new_mesh, _, _ = dolfinx.cpp.refinement.refine_plaza(
         mesh._cpp_object, edges_to_ref, True,
         dolfinx.mesh.RefinementOption.none)
-    new_mesh = dolfinx.mesh.Mesh(
+    return dolfinx.mesh.Mesh(
         new_mesh, ufl.Mesh(mesh._ufl_domain.ufl_coordinate_element()))
 
-    return new_mesh
 
-
-import scipy.spatial
+rng = np.random.default_rng()
 def balance_ptcls(ptcls, mesh, np_min, np_max):
     """
     To encourage efficiency and appropriate resolution we add and remove
@@ -141,7 +140,7 @@ def balance_ptcls(ptcls, mesh, np_min, np_max):
     for c in range(num_cells):
         np_this_cell = np_per_cell[c]
         for j in range(np_max, np_this_cell):
-            ptcls.delete_particle(c, np.random.randint(np_this_cell))
+            ptcls.delete_particle(c, rng.integers(np_this_cell))
             np_this_cell -= 1
 
     # Determine the cells to populate with additional particles
@@ -182,7 +181,7 @@ class Problem:
         self._solver.getPC().setType(PETSc.PC.Type.LU)
         self._solver.getPC().setFactorSolverType("mumps")
 
-    def velocity(self, t: float, do_refine: bool=True):
+    def velocity(self, t: float, do_refine: bool = True):
         """
         Velocity computation function to be used in Ruge-Kutta advection
 
@@ -212,14 +211,6 @@ class Problem:
         if len(deficient_cells) > 0:
             pprint(f"Particle deficient cells found: {deficient_cells}",
                    rank=mesh.comm.rank)
-
-            import febug
-            plotter = febug.plot_mesh(mesh)
-            # febug.plot_entity_indices(mesh, mesh.topology.dim, plotter=plotter)
-            import pyvista
-            pd = pyvista.PolyData(ptcls.x().data()[ptcls.active_pidxs()])
-            plotter.add_mesh(pd)
-            plotter.show()
 
         # Do the projection
         pyleopart.transfer_to_function(
@@ -267,12 +258,14 @@ class Problem:
                 marker=lambda x: np.isclose(x[1], 0.0) | np.isclose(x[1], H))
             facets_left_right = dolfinx.mesh.locate_entities_boundary(
                 mesh, dim=mesh.topology.dim - 1,
-                marker=lambda x: np.isclose(x[0], 0.0) | np.isclose(x[0], lmbda))
+                marker=lambda x:
+                    np.isclose(x[0], 0.0) | np.isclose(x[0], lmbda))
 
             V_x = W.sub(0).sub(0).collapse()
             zero = dolfinx.fem.Function(V_x[0])
             dofs_lr = dolfinx.fem.locate_dofs_topological(
-                (W.sub(0).sub(0), V_x[0]), mesh.topology.dim - 1, facets_left_right)
+                (W.sub(0).sub(0), V_x[0]), mesh.topology.dim - 1,
+                facets_left_right)
             zero_x_bc = dolfinx.fem.dirichletbc(zero, dofs_lr, W.sub(0).sub(0))
 
             W0 = W.sub(0).collapse()
@@ -300,7 +293,8 @@ class Problem:
 
             # Apply boundary conditions to the rhs
             dolfinx.fem.apply_lifting(b, [a], bcs=[bcs])
-            b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+            b.ghostUpdate(
+                addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
             dolfinx.fem.set_bc(b, bcs)
 
             # Solve linear system and update ghost values in the solution
@@ -308,18 +302,12 @@ class Problem:
             self._solver.setOperators(A)
             self._solver.solve(b, x)
             Uh.x.scatter_forward()
-
             uh = Uh.sub(0)
-            self.last_mesh = mesh
-            self.last_vel = uh
-            # del problem
-            return uh._cpp_object
-
         elif scheme is Scheme.c0sipg:
             if mesh.ufl_cell() != ufl.triangle:
                 err_msg = (
-                    "Non-affine cells require careful interpolation to appropriate "
-                    "velocity spaces")
+                    "Non-affine cells require careful interpolation to "
+                    "appropriate velocity spaces")
                 raise NotImplementedError(err_msg)
             # Stream function space
             PSI = dolfinx.fem.FunctionSpace(mesh, ("CG", p + 1))
@@ -385,8 +373,9 @@ class Problem:
                 interior = (
                     - ufl.inner(tensor_jump(u, n), ufl.avg(sigma(v)))
                     - ufl.inner(tensor_jump(v, n), ufl.avg(sigma(u)))
-                    + ufl.inner(beta("+") * G_mult(ufl.avg(G), tensor_jump(u, n)),
-                                tensor_jump(v, n))) * ufl.dS
+                    + ufl.inner(
+                        beta("+") * G_mult(ufl.avg(G), tensor_jump(u, n)),
+                        tensor_jump(v, n))) * ufl.dS
                 exterior = (
                     - ufl.inner(ufl.outer(u, n), sigma(v))
                     - ufl.inner(ufl.outer(v, n), sigma(u))
@@ -440,10 +429,9 @@ class Problem:
             uh = dolfinx.fem.Function(uh_spc)
             uh.interpolate(uh_expr)
 
-            self.last_mesh = mesh
-            self.last_vel = uh
-
-            return uh._cpp_object
+        self.last_mesh = mesh
+        self.last_vel = uh
+        return uh._cpp_object
 
     def relocator(self, ptcls):
         """
@@ -457,7 +445,7 @@ class Problem:
 
     def estimate_dt(self, h, c_cfl):
         """
-        The time step is estimated from the Courant–Friedrichs–Lewy condition.
+        The time step is estimated from the Courant-Friedrichs-Lewy condition.
 
         Args:
             h: Mesh cell size
@@ -476,8 +464,7 @@ class Problem:
         uspd.interpolate(uspd_expr)
         uspd.vector.assemble()
         max_u_vec = uspd.vector.norm(PETSc.NormType.INF)
-        dt = c_cfl * h / max_u_vec
-        return dt
+        return c_cfl * h / max_u_vec
 
 # h measured used in CFL criterion estimation
 h_measure = dolfinx.cpp.mesh.h(
