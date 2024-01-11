@@ -284,4 +284,10 @@ PYBIND11_MODULE(cpp, m)
            std::vector<std::int32_t>& cells) {
           return leopart::utils::evaluate_basis_functions<dtype>(*V, x, cells);
         });
+
+  m.def("create_bbox_pointcloud",
+        [](std::vector<std::pair<std::array<dtype_geom, 3>, std::int32_t>> points)
+        {
+          return dolfinx::geometry::BoundingBoxTree<dtype_geom>(points);
+        });
 }
