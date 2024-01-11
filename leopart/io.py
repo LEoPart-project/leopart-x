@@ -20,6 +20,15 @@ import leopart.cpp
 class XDMFParticlesFile:
 
     def __init__(self, comm: MPI.Intracomm, filename: str, mode: adios2.Mode):
+        """
+        Class for writing particle data to binary hdf5 data files with XDMF
+        front end index.
+
+        Args:
+            comm: MPI communicator
+            filename: Output file path
+            mode: adios2 enum mode (e.g., read, write append)
+        """
         self.comm = comm
         self.filename = pathlib.Path(filename)
         self.mode = mode
@@ -97,6 +106,14 @@ class XDMFParticlesFile:
     def write_particles(
             self, particles: leopart.cpp.Particles, t: float,
             field_names: typing.Optional[typing.Sequence[str]] = None):
+        """
+        Write the particle data to file along with the provided fields' data.
+
+        Args:
+            particles: Particles to write to file
+            t: Time step
+            field_names: Names of particles' field data to write
+        """
         if field_names is None:
             field_names = []
         active_pidxs = particles.active_pidxs()
@@ -110,6 +127,14 @@ class XDMFParticlesFile:
             self, points: np.typing.NDArray,
             data_map: typing.Dict[str, np.typing.NDArray],
             t: float):
+        """
+        Write a point cloud with associated data to file.
+
+        Args:
+            points: Point cloud
+            data_map: Map from name to data for each point in the point cloud
+            t: Time step
+        """
         nlocal = points.shape[0]
         im_data = dolfinx.common.IndexMap(MPI.COMM_WORLD, nlocal)
         nglobal = im_data.size_global
