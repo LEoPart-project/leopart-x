@@ -193,6 +193,15 @@ PYBIND11_MODULE(cpp, m)
   // Advection functions
   m.def("rk",
         [](
+          Particles<dtype>& ptcls,
+          const leopart::advect::Tableau<dtype>& tableau,
+          std::function<std::shared_ptr<dolfinx::fem::Function<dtype>>(dtype)> velocity_callback,
+          std::function<void(Particles<dtype>&)> relocate_callback,
+          const dtype t, const dtype dt) {
+          leopart::advect::rk(ptcls, tableau, velocity_callback, relocate_callback, t, dt);
+        });
+  m.def("rk",
+        [](
           const dolfinx::mesh::Mesh<dtype_geom>& mesh,
           Particles<dtype>& ptcls,
           const leopart::advect::Tableau<dtype>& tableau,
@@ -274,5 +283,11 @@ PYBIND11_MODULE(cpp, m)
            std::vector<dtype>& x,
            std::vector<std::int32_t>& cells) {
           return leopart::utils::evaluate_basis_functions<dtype>(*V, x, cells);
+        });
+
+  m.def("create_bbox_pointcloud",
+        [](std::vector<std::pair<std::array<dtype_geom, 3>, std::int32_t>> points)
+        {
+          return dolfinx::geometry::BoundingBoxTree<dtype_geom>(points);
         });
 }

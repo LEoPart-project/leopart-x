@@ -251,10 +251,10 @@ Tableau<T> ralston()
 // Explicit Runge-Kutta method
 template <std::floating_point T>
 void rk(
-  const dolfinx::mesh::Mesh<T>& mesh, // TODO: The mesh could vary with time
   leopart::Particles<T>& ptcls,
   const Tableau<T>& tableau,
   std::function<std::shared_ptr<dolfinx::fem::Function<T>>(T)> velocity_callback,
+  std::function<void(leopart::Particles<T>&)> relocation_callback,
   const T t, const T dt)
 {
   dolfinx::common::Timer timer("leopart::advect::rk");
@@ -291,7 +291,7 @@ void rk(
       for (std::size_t j = 0; j < xp.size(); ++j)
         xp[j] = xn[j] + suffix[j];
       
-      ptcls.relocate_bbox(mesh, ptcls.active_pidxs());
+      relocation_callback(ptcls);
     }
 
     std::shared_ptr<dolfinx::fem::Function<T>> uh_t = velocity_callback(t + c[s] * dt);
@@ -314,7 +314,23 @@ void rk(
   std::span<T> xp = ptcls.x().data();
   for (std::size_t i = 0; i < suffix.size(); ++i)
     xp[i] = xn[i] + dt * suffix[i];
-  ptcls.relocate_bbox(mesh, ptcls.active_pidxs());
+  relocation_callback(ptcls);
+};
+
+
+template <std::floating_point T>
+void rk(
+  const dolfinx::mesh::Mesh<T>& mesh,
+  leopart::Particles<T>& ptcls,
+  const Tableau<T>& tableau,
+  std::function<std::shared_ptr<dolfinx::fem::Function<T>>(T)> velocity_callback,
+  const T t, const T dt)
+{
+  auto relocation_callback = [&mesh](leopart::Particles<T>& ptcls)
+  {
+    ptcls.relocate_bbox(mesh, ptcls.active_pidxs());
+  };
+  rk<T>(ptcls, tableau, velocity_callback, relocation_callback, t, dt);
 };
 
 } // namespace advect
