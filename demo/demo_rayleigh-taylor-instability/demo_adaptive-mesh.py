@@ -12,6 +12,7 @@ import adios2
 import numpy as np
 import scipy.spatial
 
+import basix.ufl
 import dolfinx
 import dolfinx.fem.petsc
 import leopart.cpp as pyleopart
@@ -85,7 +86,7 @@ chem_label = "C"
 ptcls.add_field(chem_label, [1])
 
 # Create function space for continuum representation of chemistry data
-chem_space = dolfinx.fem.FunctionSpace(mesh0, ("DG", 0))
+chem_space = dolfinx.fem.functionspace(mesh0, ("DG", 0))
 C = dolfinx.fem.Function(chem_space)
 C.interpolate(lambda x: np.ones_like(x[0], dtype=np.double), cells_top)
 C.interpolate(lambda x: np.zeros_like(x[0], dtype=np.double), cells_bottom)
@@ -113,15 +114,16 @@ def refine_mesh(mesh):
     # Refine those cells which have non-uniform chemistry data
     mesh.topology.create_entities(1)
     edges_to_ref = dolfinx.mesh.compute_incident_entities(
-        mesh.topology, cell_markers, mesh.topology.dim, 1)
-    new_mesh, _, _ = dolfinx.cpp.refinement.refine_plaza(
-        mesh._cpp_object, edges_to_ref, True,
-        dolfinx.mesh.RefinementOption.none)
-    return dolfinx.mesh.Mesh(
-        new_mesh, ufl.Mesh(mesh._ufl_domain.ufl_coordinate_element()))
+        mesh.topology, np.array(cell_markers, dtype=np.int32),
+        mesh.topology.dim, 1)
+    new_mesh, _, _ = dolfinx.mesh.refine(
+        mesh, edges_to_ref, option=dolfinx.mesh.RefinementOption.none)
+    return new_mesh
 
 
 rng = np.random.default_rng()
+
+
 def balance_ptcls(ptcls, mesh, np_min, np_max):
     """
     To encourage efficiency and appropriate resolution we add and remove
@@ -168,18 +170,14 @@ def balance_ptcls(ptcls, mesh, np_min, np_max):
 
 class Problem:
 
-    def __init__(self, comm):
+    def __init__(self):
         """
         Utility class for computing the velocity approximation to be used
         in the particles' Runge-Kutta advection scheme.
-
-        Args:
-            comm: MPI communicator
         """
-        self._solver = PETSc.KSP().create(comm)
-        self._solver.setType(PETSc.KSP.Type.PREONLY)
-        self._solver.getPC().setType(PETSc.PC.Type.LU)
-        self._solver.getPC().setFactorSolverType("mumps")
+        self._petsc_options = {
+            "ksp_type": "preonly", "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps"}
 
     def velocity(self, t: float, do_refine: bool = True):
         """
@@ -201,7 +199,7 @@ class Problem:
         mesh = new_mesh
 
         # Project the chemistry data into a continuum approximation
-        chem_space = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
+        chem_space = dolfinx.fem.functionspace(mesh, ("DG", 0))
         C = dolfinx.fem.Function(chem_space)
         ptcls.relocate_bbox(mesh._cpp_object, ptcls.active_pidxs())
 
@@ -236,10 +234,11 @@ class Problem:
 
         if scheme is Scheme.taylor_hood:
             # Standard Taylor Hood mixed element
-            Ve = ufl.VectorElement("CG", mesh.ufl_cell(), p)
-            Qe = ufl.FiniteElement("CG", mesh.ufl_cell(), p - 1)
-            We = ufl.MixedElement([Ve, Qe])
-            W = dolfinx.fem.FunctionSpace(mesh, We)
+            Ve = basix.ufl.element(
+                "Lagrange", mesh.basix_cell(), p, shape=(mesh.geometry.dim,))
+            Qe = basix.ufl.element("Lagrange", mesh.basix_cell(), p - 1)
+            We = basix.ufl.mixed_element([Ve, Qe])
+            W = dolfinx.fem.functionspace(mesh, We)
             u, p_ = ufl.TrialFunctions(W)
             v, q = ufl.TestFunctions(W)
             Uh = dolfinx.fem.Function(W)
@@ -274,43 +273,22 @@ class Problem:
                 (W.sub(0), W0[0]), mesh.topology.dim - 1, facets_top_bot)
             zero_y_bc = dolfinx.fem.dirichletbc(zero, dofs_tb, W.sub(0))
 
-            a = dolfinx.fem.form(a)
-            A = dolfinx.fem.petsc.create_matrix(a)
-            L = dolfinx.fem.form(L)
-            b = dolfinx.fem.petsc.create_vector(L)
-            x = dolfinx.la.create_petsc_vector_wrap(Uh.x)
-
-            # Assemble lhs
-            bcs = [zero_x_bc, zero_y_bc]
-            A.zeroEntries()
-            dolfinx.fem.petsc.assemble_matrix_mat(A, a, bcs=bcs)
-            A.assemble()
-
-            # Assemble rhs
-            with b.localForm() as b_loc:
-                b_loc.set(0)
-            dolfinx.fem.petsc.assemble_vector(b, L)
-
-            # Apply boundary conditions to the rhs
-            dolfinx.fem.apply_lifting(b, [a], bcs=[bcs])
-            b.ghostUpdate(
-                addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-            dolfinx.fem.set_bc(b, bcs)
-
             # Solve linear system and update ghost values in the solution
-            self._solver.getPC().reset()
-            self._solver.setOperators(A)
-            self._solver.solve(b, x)
+            problem = dolfinx.fem.petsc.LinearProblem(
+                a, L, u=Uh, bcs=[zero_x_bc, zero_y_bc],
+                petsc_options_prefix="rt_adaptive_stokes_",
+                petsc_options=self._petsc_options)
+            problem.solve()
             Uh.x.scatter_forward()
             uh = Uh.sub(0)
         elif scheme is Scheme.c0sipg:
-            if mesh.ufl_cell() != ufl.triangle:
+            if mesh.topology.cell_type != dolfinx.mesh.CellType.triangle:
                 err_msg = (
                     "Non-affine cells require careful interpolation to "
                     "appropriate velocity spaces")
                 raise NotImplementedError(err_msg)
             # Stream function space
-            PSI = dolfinx.fem.FunctionSpace(mesh, ("CG", p + 1))
+            PSI = dolfinx.fem.functionspace(mesh, ("Lagrange", p + 1))
             psi = ufl.TestFunction(PSI)
             phi = ufl.TrialFunction(PSI)
             n = ufl.FacetNormal(mesh)
@@ -331,7 +309,7 @@ class Problem:
             mt_top_bot = dolfinx.mesh.meshtags(
                 mesh, mesh.topology.dim - 1, facets_top_bot,
                 np.full_like(facets_top_bot, 1, dtype=np.int32))
-            ds_0 = ufl.Measure("ds", subdomain_data=mt_top_bot)(1)
+            ds_0 = ufl.Measure("ds", domain=mesh, subdomain_data=mt_top_bot)(1)
             zero_u = dolfinx.fem.Constant(mesh, (0.0, 0.0))
 
             # Strainrate
@@ -393,39 +371,20 @@ class Problem:
 
             # Linear problem and solver
             phi_h = dolfinx.fem.Function(PSI)
-
-            a = dolfinx.fem.form(Bh(ufl.curl(phi), ufl.curl(psi)))
-            A = dolfinx.fem.petsc.create_matrix(a)
-            L = dolfinx.fem.form(lh(ufl.curl(psi)))
-            b = dolfinx.fem.petsc.create_vector(L)
-            x = phi_h.vector
-
-            bcs = [zero_bc]
-            A.zeroEntries()
-            dolfinx.fem.petsc.assemble_matrix_mat(A, a, bcs=bcs)
-            A.assemble()
-
-            # Assemble rhs
-            with b.localForm() as b_loc:
-                b_loc.set(0)
-            dolfinx.fem.petsc.assemble_vector(b, L)
-
-            # Apply boundary conditions to the rhs
-            dolfinx.fem.apply_lifting(b, [a], bcs=[bcs])
-            b.ghostUpdate(addv=PETSc.InsertMode.ADD,
-                          mode=PETSc.ScatterMode.REVERSE)
-            dolfinx.fem.set_bc(b, bcs)
+            problem = dolfinx.fem.petsc.LinearProblem(
+                Bh(ufl.curl(phi), ufl.curl(psi)), lh(ufl.curl(psi)),
+                u=phi_h, bcs=[zero_bc],
+                petsc_options_prefix="rt_adaptive_stream_",
+                petsc_options=self._petsc_options)
 
             # Solve linear system and update ghost values in the solution
-            self._solver.getPC().reset()
-            self._solver.setOperators(A)
-            self._solver.solve(b, x)
+            problem.solve()
             phi_h.x.scatter_forward()
 
             # Velocity function space into which we interpolate curl(phi)
-            uh_spc = dolfinx.fem.FunctionSpace(mesh, ("DG", p, (2,)))
+            uh_spc = dolfinx.fem.functionspace(mesh, ("DG", p, (2,)))
             uh_expr = dolfinx.fem.Expression(
-                ufl.curl(phi_h), uh_spc.element.interpolation_points())
+                ufl.curl(phi_h), uh_spc.element.interpolation_points)
             uh = dolfinx.fem.Function(uh_spc)
             uh.interpolate(uh_expr)
 
@@ -455,20 +414,20 @@ class Problem:
         Time step approximation
         """
         # Space for estimating speed for CFL criterion
-        Vspd = dolfinx.fem.FunctionSpace(self.last_mesh, ("DG", 0))
+        Vspd = dolfinx.fem.functionspace(self.last_mesh, ("DG", 0))
         uspd = dolfinx.fem.Function(Vspd)
 
         uh = self.last_vel
         uspd_expr = dolfinx.fem.Expression(
-            ufl.sqrt(ufl.inner(uh, uh)), Vspd.element.interpolation_points())
+            ufl.sqrt(ufl.inner(uh, uh)), Vspd.element.interpolation_points)
         uspd.interpolate(uspd_expr)
-        uspd.vector.assemble()
-        max_u_vec = uspd.vector.norm(PETSc.NormType.INF)
+        max_u_vec = uspd.x.petsc_vec.norm(PETSc.NormType.INF)
         return c_cfl * h / max_u_vec
 
+
 # h measured used in CFL criterion estimation
-h_measure = dolfinx.cpp.mesh.h(
-    mesh0._cpp_object, mesh0.topology.dim, np.arange(
+h_measure = mesh0.h(
+    mesh0.topology.dim, np.arange(
         mesh0.topology.index_map(mesh0.topology.dim).size_local,
         dtype=np.int32))
 hmin = mesh0.comm.allreduce(h_measure.min(), op=MPI.MIN)
@@ -480,7 +439,7 @@ ptcl_file = leopart.io.XDMFParticlesFile(
 # Main time loop
 t = 0.0
 ptcl_file.write_particles(ptcls, t, [chem_label])
-problem = Problem(mesh0.comm)
+problem = Problem()
 problem.velocity(0.0)  # Initial velocity estimate
 
 for j in range(num_t_steps_max):
@@ -503,7 +462,7 @@ for j in range(num_t_steps_max):
 
     # Output data
     ptcl_file.write_particles(ptcls, t, [chem_label])
-    chem_space = dolfinx.fem.FunctionSpace(problem.last_mesh, ("DG", 0))
+    chem_space = dolfinx.fem.functionspace(problem.last_mesh, ("DG", 0))
     C = dolfinx.fem.Function(chem_space)
 
     # Check for particle deficient cells prior to l2 projection

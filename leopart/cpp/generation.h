@@ -14,26 +14,31 @@
 
 #include <dolfinx.h>
 
+#include "utils.h"
 
-namespace dolfinx
-{
-namespace mesh
-{
-template <std::floating_point T>
-class Mesh;
-enum class CellType;
-} // namespace mesh
-namespace fem
-{
-template <std::floating_point T>
-class CoordinateElement;
-}
-} // namespace dolfinx
 
 namespace leopart
 {
 namespace generation
 {
+
+// Forward declarations
+template<std::floating_point T>
+std::vector<T> random_reference(
+  const dolfinx::mesh::CellType celltype,
+  const std::size_t n, const std::size_t seed);
+
+template<std::floating_point T>
+std::vector<T> random_reference_tetrahedron(
+  const std::size_t n, const std::size_t seed);
+
+template<std::floating_point T>
+std::vector<T> random_reference_triangle(
+  const std::size_t n, const std::size_t seed);
+
+template<std::floating_point T>
+std::vector<T> random_reference_cube(
+  const std::size_t n, const std::size_t gdim, const std::size_t seed);
 
 /// Create a set of points, distributed pro rata to the cell volumes.
 ///
@@ -61,22 +66,27 @@ mesh_fill(
       "and particles per cell (" + std::to_string(np_per_cell.size()) + ") "
       "must be same");
   
-  // Geometric dimension
+  namespace md = dolfinx::md;
+
+  // Geometric and topological dimensions
   const std::size_t gdim = mesh.geometry().dim();
+  const std::size_t tdim = mesh.topology()->dim();
 
   // Get coordinate map
   if (mesh.geometry().cmaps().size() > 1)
     throw std::runtime_error("Mixed topology not supported");
-  const dolfinx::fem::CoordinateElement<T>& cmap = mesh.geometry().cmaps()[0];
-  const std::vector<dolfinx::mesh::CellType> celltype = mesh.topology()->cell_types();
+  const dolfinx::fem::CoordinateElement<T>& cmap
+    = mesh.geometry().cmaps().front();
+  const std::vector<dolfinx::mesh::CellType> celltype
+    = mesh.topology()->cell_types();
 
   // Prepare cell geometry
-  auto x_dofmap = mesh.geometry().dofmap();
+  auto x_dofmap = mesh.geometry().dofmaps().front();
   const std::size_t num_dofs_g = cmap.dim();
   std::span<const T> x_g = mesh.geometry().x();
 
-  using mdspan2_t = leopart::math::mdspan_t<T, 2>;
-  using cmdspan4_t = leopart::math::mdspan_t<const T, 4>;
+  using mdspan2_t = leopart::utils::mdspan_t<T, 2>;
+  using cmdspan4_t = leopart::utils::mdspan_t<const T, 4>;
 
   // Data to be returned
   std::vector<std::int32_t> p_cells;
@@ -89,37 +99,31 @@ mesh_fill(
     const std::size_t np = np_per_cell[i];
 
     // Generate coordinates on reference element
-    const std::array<std::size_t, 2> Xshape = {np, gdim};
+    const std::array<std::size_t, 2> Xshape = {np, tdim};
     const std::size_t seed = seed_int.value_or(std::random_device{}());
     const std::vector<T> X = random_reference<T>(celltype[0], np, seed);
 
-    // Loop over cells and tabulate dofs
-    std::vector<T> x_b(Xshape[0] * Xshape[1]);
-    mdspan2_t x(x_b.data(), Xshape[0], Xshape[1]);
+    // Physical coordinates of the generated points
+    std::vector<T> x_b(np * gdim);
+    mdspan2_t x(x_b.data(), np, gdim);
 
     std::vector<T> coordinate_dofs_b(num_dofs_g * gdim);
     mdspan2_t coordinate_dofs(coordinate_dofs_b.data(), num_dofs_g, gdim);
 
-    std::span<const std::uint32_t> cell_info;
-
     const std::array<std::size_t, 4> phi_shape
         = cmap.tabulate_shape(0, Xshape[0]);
-    std::vector<T> phi_b(
-        std::reduce(phi_shape.begin(), phi_shape.end(), 1, std::multiplies{}));
+    std::vector<T> phi_b(std::reduce(
+      phi_shape.begin(), phi_shape.end(), std::size_t(1), std::multiplies{}));
     cmdspan4_t phi_full(phi_b.data(), phi_shape);
-    auto phi = MDSPAN_IMPL_STANDARD_NAMESPACE::MDSPAN_IMPL_PROPOSED_NAMESPACE::
-        submdspan(phi_full, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                  MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    auto phi = md::submdspan(phi_full, 0, md::full_extent, md::full_extent, 0);
 
     cmap.tabulate(0, X, Xshape, phi_b);
 
     // Extract cell geometry
-    auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::
-        MDSPAN_IMPL_PROPOSED_NAMESPACE::submdspan(
-            x_dofmap, c, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
-    for (std::size_t i = 0; i < x_dofs.size(); ++i)
+    auto x_dofs = md::submdspan(x_dofmap, c, md::full_extent);
+    for (std::size_t k = 0; k < x_dofs.size(); ++k)
       for (std::size_t j = 0; j < gdim; ++j)
-        coordinate_dofs(i, j) = x_g[3 * x_dofs[i] + j];
+        coordinate_dofs(k, j) = x_g[3 * x_dofs[k] + j];
 
     // Tabulate physical coordinates on cell
     cmap.push_forward(x, coordinate_dofs, phi);

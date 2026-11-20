@@ -66,6 +66,8 @@ pass the copy to the function.
 #pragma once
 
 #include <basix/mdspan.hpp>
+#include <cstddef>
+#include <span>
 
 namespace quadprogpp
 {

@@ -40,7 +40,7 @@ def u_f(x):
     return np.stack((x[1] * (1 - x[0] ** 2), -x[0] * (1 - x[1] ** 2)))
 
 
-V = dolfinx.fem.FunctionSpace(mesh, ("CG", 2, (2,)))
+V = dolfinx.fem.functionspace(mesh, ("Lagrange", 2, (2,)))
 u = dolfinx.fem.Function(V)
 u.interpolate(u_f)
 

@@ -117,7 +117,7 @@ _create_tempdir._sequencenumber = defaultdict(int)
 _create_tempdir._basepaths = set()
 
 
-@pytest.fixture()
+@pytest.fixture
 def tempdir(request):
     """Return a unique directory name for this test function instance.
 
