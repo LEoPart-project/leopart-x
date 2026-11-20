@@ -44,14 +44,14 @@ for run_num, (dt, n_steps) in enumerate(zip(dt_vals, n_steps_vals)):
     ptcls = pyleopart.Particles(xp, p2cell)
     tableau.check_and_create_fields(ptcls)
 
-    V = dolfinx.fem.FunctionSpace(
-        mesh, ("CG", max(tableau.order - 1, 1), (mesh.geometry.dim,)))
+    V = dolfinx.fem.functionspace(
+        mesh, ("Lagrange", max(tableau.order - 1, 1), (mesh.geometry.dim,)))
     u = dolfinx.fem.Function(V)
 
     u.interpolate(u_f)
     u.x.scatter_forward()
 
-    DG0 = dolfinx.fem.FunctionSpace(mesh, ("DG", tableau.order - 1))
+    DG0 = dolfinx.fem.functionspace(mesh, ("DG", tableau.order - 1))
     phi0 = dolfinx.fem.Function(DG0)
     phi0.interpolate(phi0_f)
 

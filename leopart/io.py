@@ -16,6 +16,12 @@ import numpy.typing
 import dolfinx
 import leopart.cpp
 
+try:
+    # ADIOS2 >= 2.10 exposes the low-level API as adios2.bindings
+    import adios2.bindings as adios2_bindings
+except ImportError:
+    adios2_bindings = adios2
+
 
 class XDMFParticlesFile:
 
@@ -33,13 +39,13 @@ class XDMFParticlesFile:
         self.filename = pathlib.Path(filename)
         self.mode = mode
 
-        self.adios = adios2.ADIOS(self.comm)
+        self.adios = adios2_bindings.ADIOS(self.comm)
         self.io_name = f"XDMFParticlesFile_{hash(self)}"
         self.io = self.adios.DeclareIO(self.io_name)
         self.io.SetEngine("HDF5")
 
         self.xml_doc = None
-        if mode is adios2.Mode.Write:
+        if mode == adios2_bindings.Mode.Write:
             xdmf = ET.Element("Xdmf")
             xdmf.attrib["Version"] = "3.0"
             xdmf.attrib["xmlns:xi"] = "http://www.w3.org/2001/XInclude"
@@ -54,8 +60,9 @@ class XDMFParticlesFile:
             self.step_count = 0
 
             self.outfile = self.io.Open(
-                str(self.filename.with_suffix(".h5")), adios2.Mode.Write)
-        elif mode is adios2.Mode.Append or mode is adios2.Mode.Read:
+                str(self.filename.with_suffix(".h5")),
+                adios2_bindings.Mode.Write)
+        elif mode in (adios2_bindings.Mode.Append, adios2_bindings.Mode.Read):
             raise NotImplementedError
 
     def __del__(self):
@@ -136,9 +143,9 @@ class XDMFParticlesFile:
             t: Time step
         """
         nlocal = points.shape[0]
-        im_data = dolfinx.common.IndexMap(MPI.COMM_WORLD, nlocal)
-        nglobal = im_data.size_global
-        local_range = im_data.local_range
+        im_data = dolfinx.common.IndexMap(self.comm, nlocal)
+        nglobal = int(im_data.size_global)
+        local_range = [int(v) for v in im_data.local_range]
 
         # Update xml data
         t_str = f"{t:.12e}".replace(".", "_").replace("-", "_")

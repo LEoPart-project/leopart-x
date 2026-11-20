@@ -33,7 +33,7 @@ def create_mesh(cell_type, dtype, n):
 @pytest.mark.parametrize("shape", [(1,), (2,)])
 def test_find_deficient_cells(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
@@ -70,7 +70,7 @@ def test_find_deficient_cells(k, dtype, cell_type, shape):
 @pytest.mark.parametrize("shape", [(1,), (2,)])
 def test_transfer_to_particles(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
@@ -107,7 +107,7 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
 @pytest.mark.parametrize("shape", [(1,), (2,)])
 def test_transfer_to_function(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
     npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
@@ -149,7 +149,7 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     assert (nele * x0) % 2.0 == 0.0
 
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k))
 
     x, c = pyleopart.generate_at_dof_coords(Q._cpp_object)
     p = pyleopart.Particles(x, c)
@@ -199,8 +199,8 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
     l2_errors = np.zeros_like(num_eles, dtype=np.double)
     for run_num, n_ele in enumerate(num_eles):
         mesh = create_mesh(cell_type, dtype, n_ele)
-        Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
-        Q_high = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
+        Q = dolfinx.fem.functionspace(mesh, ("DG", k))
+        Q_high = dolfinx.fem.functionspace(mesh, ("DG", k))
 
         dofs_per_cell = Q.dofmap.dof_layout.num_entity_closure_dofs(
             mesh.topology.dim)

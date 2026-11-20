@@ -2,3 +2,7 @@
 # This file is part of LEoPart-X, a particle-in-cell package for DOLFIN-X
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
+
+# DOLFINx must be imported before the LEoPart-x C++ module so that
+# DOLFINx's nanobind types (Mesh, Function, ...) are registered.
+import dolfinx  # noqa: F401

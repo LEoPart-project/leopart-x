@@ -1,18 +1,25 @@
 [build-system]
-requires = ["scikit-build-core[pyproject]", "pybind11"]
+requires = ["scikit-build-core[pyproject]>=0.11", "nanobind>=2.5.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "leopart"
-version = "0.7.2"
-requires-python = ">=3.8.0"
+version = "0.11.0"
+description = "Particle functionality for DOLFINx"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "LGPL-3.0-or-later"
+dependencies = ["fenics-dolfinx>=0.11.0,<0.12.0", "numpy"]
+
+[project.optional-dependencies]
+io = ["adios2"]
+test = ["pytest"]
 
 [tool.scikit-build]
 wheel.packages = ["leopart"]
-sdist.exclude = ["*.cpp", "*.h", "*.cc", "*.hh", "*.txt"]
-cmake.verbose = true
+cmake.version = ">=3.21"
 logging.level = "INFO"
-build-dir = "./build"
+build-dir = "build/{wheel_tag}"
 
 [tool.ruff]
 line-length = 80

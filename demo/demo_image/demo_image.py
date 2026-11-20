@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import dolfinx
-import dolfinx.nls.petsc
+import dolfinx.fem.petsc
 import leopart.cpp as pyleopart
 import ufl
 
@@ -59,11 +59,11 @@ ptcls.field(gray_label).data().T[:] = grayscale
 ptcls.field(noise_label).data().T[:] = np.clip(grayscale + noise, 0.0, 1.0)
 
 # DG0 continuum for image data
-DG0 = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
+DG0 = dolfinx.fem.functionspace(mesh, ("DG", 0))
 u_img = dolfinx.fem.Function(DG0)
 
 # FE space and problem for data diffusion
-V = dolfinx.fem.FunctionSpace(mesh, ("CG", 1))
+V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
 uh = dolfinx.fem.Function(V)
 um = dolfinx.fem.Function(V)
 uth = 0.5 * (uh + um)
@@ -73,7 +73,7 @@ v = ufl.TestFunction(V)
 sigma_d0 = dolfinx.fem.Constant(mesh, 0.0)
 pm_d = ufl.exp(
     - ufl.inner(ufl.grad(uth), ufl.grad(uth)) / (2 * sigma_d0**2))
-pmd_expr = dolfinx.fem.Expression(pm_d, DG0.element.interpolation_points())
+pmd_expr = dolfinx.fem.Expression(pm_d, DG0.element.interpolation_points)
 pmd_dg0 = dolfinx.fem.Function(DG0)
 
 dt = dolfinx.fem.Constant(mesh, 0.0)
@@ -81,18 +81,15 @@ F = ufl.inner((uh - um) / dt, v) * ufl.dx
 F += ufl.inner(pm_d * ufl.grad(uth), ufl.grad(v)) * ufl.dx
 
 # Nonlinear solver and parameters
-problem = dolfinx.fem.petsc.NonlinearProblem(F, uh)
-solver = dolfinx.nls.petsc.NewtonSolver(MPI.COMM_WORLD, problem)
-solver.max_it = 10
-solver.rtol = 1e-5
-
-ksp = solver.krylov_solver
-opts = PETSc.Options()
-option_prefix = ksp.getOptionsPrefix()
-opts[f"{option_prefix}ksp_type"] = "preonly"
-opts[f"{option_prefix}pc_type"] = "lu"
-opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-ksp.setFromOptions()
+problem = dolfinx.fem.petsc.NonlinearProblem(
+    F, uh, petsc_options_prefix="perona_malik_",
+    petsc_options={
+        "snes_type": "newtonls",
+        "snes_max_it": 10,
+        "snes_rtol": 1e-5,
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps"})
 
 # Utility functions for storing snapshot data
 def create_timestamp(t):
@@ -139,7 +136,7 @@ uh.x.scatter_forward()
 for n in range(max_steps):
     if n > 0:
         # Adapt time step
-        diff = uh.vector - um.vector
+        diff = uh.x.petsc_vec - um.x.petsc_vec
         diff.abs()
         du = diff.max()[1]
         dt_new = dt_scl * dt.value * (du_max / (euler_o * du))
@@ -152,7 +149,8 @@ for n in range(max_steps):
     t += dt.value
     um.x.array[:] = uh.x.array
     um.x.scatter_forward()
-    solver.solve(uh)
+    problem.solve()
+    uh.x.scatter_forward()
     if n % snapshot_interval == 0 or n == max_steps - 1:
         record_snapshot(create_timestamp(t))
         t_snapshots += [t]

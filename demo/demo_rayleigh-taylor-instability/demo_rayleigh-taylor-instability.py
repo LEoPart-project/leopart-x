@@ -11,6 +11,7 @@ from petsc4py import PETSc
 import adios2
 import numpy as np
 
+import basix.ufl
 import dolfinx
 import dolfinx.fem.petsc
 import leopart.cpp as pyleopart
@@ -51,7 +52,7 @@ mesh = dolfinx.mesh.create_rectangle(
 
 # Chemistry space. A value of 1 corresponds to dense material, and 0 light
 # material
-chem_space = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
+chem_space = dolfinx.fem.functionspace(mesh, ("DG", 0))
 C = dolfinx.fem.Function(chem_space)
 C.interpolate(lambda x: np.where(x[1] > db, 1.0, 0.0))
 C.x.scatter_forward()
@@ -86,10 +87,11 @@ scheme = Scheme.taylor_hood
 
 if scheme is Scheme.taylor_hood:
     # Standard Taylor Hood mixed element
-    Ve = ufl.VectorElement("CG", mesh.ufl_cell(), p)
-    Qe = ufl.FiniteElement("CG", mesh.ufl_cell(), p - 1)
-    We = ufl.MixedElement([Ve, Qe])
-    W = dolfinx.fem.FunctionSpace(mesh, We)
+    Ve = basix.ufl.element(
+        "Lagrange", mesh.basix_cell(), p, shape=(mesh.geometry.dim,))
+    Qe = basix.ufl.element("Lagrange", mesh.basix_cell(), p - 1)
+    We = basix.ufl.mixed_element([Ve, Qe])
+    W = dolfinx.fem.functionspace(mesh, We)
     u, p_ = ufl.TrialFunctions(W)
     v, q = ufl.TestFunctions(W)
     Uh = dolfinx.fem.Function(W)
@@ -124,6 +126,7 @@ if scheme is Scheme.taylor_hood:
 
     problem = dolfinx.fem.petsc.LinearProblem(
         a, L, u=Uh, bcs=[zero_x_bc, zero_y_bc],
+        petsc_options_prefix="rt_stokes_",
         petsc_options={"ksp_type": "preonly", "pc_type": "lu",
                        "pc_factor_mat_solver_type": "mumps"})
 
@@ -137,13 +140,13 @@ if scheme is Scheme.taylor_hood:
         return uh._cpp_object
 
 elif scheme is Scheme.c0sipg:
-    if mesh.ufl_cell() != ufl.triangle:
+    if mesh.topology.cell_type != dolfinx.mesh.CellType.triangle:
         err_msg = (
             "Non-affine cells require careful interpolation to appropriate "
             "velocity spaces")
         raise NotImplementedError(err_msg)
     # Stream function space
-    PSI = dolfinx.fem.FunctionSpace(mesh, ("CG", p + 1))
+    PSI = dolfinx.fem.functionspace(mesh, ("Lagrange", p + 1))
     psi = ufl.TestFunction(PSI)
     phi = ufl.TrialFunction(PSI)
     n = ufl.FacetNormal(mesh)
@@ -164,7 +167,7 @@ elif scheme is Scheme.c0sipg:
     mt_top_bot = dolfinx.mesh.meshtags(
         mesh, mesh.topology.dim - 1, facets_top_bot,
         np.full_like(facets_top_bot, 1, dtype=np.int32))
-    ds_0 = ufl.Measure("ds", subdomain_data=mt_top_bot)(1)
+    ds_0 = ufl.Measure("ds", domain=mesh, subdomain_data=mt_top_bot)(1)
     zero_u = dolfinx.fem.Constant(mesh, (0.0, 0.0))
 
     # Strainrate
@@ -227,13 +230,14 @@ elif scheme is Scheme.c0sipg:
     problem = dolfinx.fem.petsc.LinearProblem(
         Bh(ufl.curl(phi), ufl.curl(psi)), lh(ufl.curl(psi)),
         u=phi_h, bcs=[zero_bc],
+        petsc_options_prefix="rt_stream_",
         petsc_options={"ksp_type": "preonly", "pc_type": "lu",
                        "pc_factor_mat_solver_type": "mumps"})
 
     # Velocity function space into which we interpolate curl(phi)
-    uh_spc = dolfinx.fem.FunctionSpace(mesh, ("DG", p, (2,)))
+    uh_spc = dolfinx.fem.functionspace(mesh, ("DG", p, (2,)))
     uh_expr = dolfinx.fem.Expression(
-        ufl.curl(phi_h), uh_spc.element.interpolation_points())
+        ufl.curl(phi_h), uh_spc.element.interpolation_points)
     uh = dolfinx.fem.Function(uh_spc)
 
     # Velocity as function of time to be used in Runge-Kutta integration
@@ -247,8 +251,9 @@ elif scheme is Scheme.c0sipg:
         return uh._cpp_object
 
 # h measured used in CFL criterion estimation
-h_measure = dolfinx.cpp.mesh.h(
-    mesh._cpp_object, mesh.topology.dim - 1, np.arange(
+mesh.topology.create_entities(mesh.topology.dim - 1)
+h_measure = mesh.h(
+    mesh.topology.dim - 1, np.arange(
         mesh.topology.index_map(mesh.topology.dim - 1).size_local,
         dtype=np.int32))
 hmin = mesh.comm.allreduce(h_measure.min(), op=MPI.MIN)
@@ -259,10 +264,10 @@ ptcl_file = leopart.io.XDMFParticlesFile(
 chem_file = dolfinx.io.XDMFFile(mesh.comm, "C.xdmf", "w")
 
 # Space for estimating speed for CFL criterion
-Vspd = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
+Vspd = dolfinx.fem.functionspace(mesh, ("DG", 0))
 uspd = dolfinx.fem.Function(Vspd)
 uspd_expr = dolfinx.fem.Expression(
-    ufl.sqrt(ufl.inner(uh, uh)), Vspd.element.interpolation_points())
+    ufl.sqrt(ufl.inner(uh, uh)), Vspd.element.interpolation_points)
 
 urms_form = dolfinx.fem.form(ufl.inner(uh, uh) * ufl.dx)
 def compute_urms():
@@ -283,8 +288,7 @@ urms_vals.append(compute_urms())
 for j in range(num_t_steps_max):
     # Estimate dt based on CFL criterion
     uspd.interpolate(uspd_expr)
-    uspd.vector.assemble()
-    max_u_vec = uspd.vector.norm(PETSc.NormType.INF)
+    max_u_vec = uspd.x.petsc_vec.norm(PETSc.NormType.INF)
     dt = (c_cfl := 1.0) * hmin / max_u_vec
     pprint(f"Time step {j}, dt = {dt:.3e}, t = {t:.3e}", rank=0)
 

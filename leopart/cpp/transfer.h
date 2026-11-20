@@ -33,9 +33,12 @@ using leopart::utils::mdspan_t;
 /// @param particles Particles collection
 /// @param field Field data into which to store the interpolation
 /// @param f The finite element function to be interpolated
+/// @param tol Tolerance of the Newton solver used in non-affine pull-backs
+/// @param maxit Maximum Newton iterations used in non-affine pull-backs
 template <dolfinx::scalar T>
 void transfer_to_particles(const Particles<T>& particles, Field<T>& field,
-                           std::shared_ptr<const dolfinx::fem::Function<T>> f)
+                           std::shared_ptr<const dolfinx::fem::Function<T>> f,
+                           const double tol = 1.0e-6, const int maxit = 15)
 {
   const std::vector<std::int32_t>& p2c = particles.particle_to_cell();
 
@@ -46,7 +49,7 @@ void transfer_to_particles(const Particles<T>& particles, Field<T>& field,
   const std::span<T> u = field.data();
   const std::array<std::size_t, 2> ushape = {field.size(), field.value_size()};
 
-  f->eval(x, xshape, p2c, u, ushape);
+  f->eval(x, xshape, p2c, u, ushape, tol, maxit);
 }
 
 /// Transfer the provided particle field data to the finite element
@@ -74,12 +77,10 @@ std::vector<std::int32_t> find_deficient_cells(
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<U>> mesh
     = f->function_space()->mesh();
-  std::shared_ptr<const dolfinx::fem::FunctionSpace<T>> V
+  std::shared_ptr<const dolfinx::fem::FunctionSpace<U>> V
     = f->function_space();
   const int tdim = mesh->topology()->dim();
   std::int32_t ncells = mesh->topology()->index_map(tdim)->size_local();
-  std::shared_ptr<const dolfinx::fem::FiniteElement<T>> element
-    = f->function_space()->element();
 
   const std::vector<std::vector<std::size_t>>& c2p
     = pax.cell_to_particle();
@@ -88,7 +89,9 @@ std::vector<std::int32_t> find_deficient_cells(
   for (std::int32_t c = 0; c < ncells; ++c)
   {
     const std::size_t ncdof = V->dofmap()->cell_dofs(c).size();
-    if (c2p[c].size() < ncdof)
+    const std::size_t ncp
+      = (static_cast<std::size_t>(c) < c2p.size()) ? c2p[c].size() : 0;
+    if (ncp < ncdof)
       deficient_cells.push_back(c);
   }
   return deficient_cells;
@@ -125,28 +128,28 @@ void transfer_to_function_l2_callback(
 
   // Get element
   assert(f->function_space()->element());
-  std::shared_ptr<const dolfinx::fem::FiniteElement<T>> element
+  std::shared_ptr<const dolfinx::fem::FiniteElement<U>> element
       = f->function_space()->element();
   assert(element);
 
   // @todo these definitions are legacy DOLFIN and should be refactored for
   // appropriate unrolling of DoFs.
   const int block_size = element->block_size();
-  // const int value_size = element->value_size() / block_size;
   const std::size_t space_dimension = element->space_dimension() / block_size;
 
   std::shared_ptr<const dolfinx::fem::DofMap> dm
       = f->function_space()->dofmap();
 
   // Vector of expansion_coefficients to be set
-  std::span<T> expansion_coefficients = f->x()->mutable_array();
+  std::span<T> expansion_coefficients = f->x()->array();
   const std::vector<std::vector<std::size_t>>& cell_to_particle
       = pax.cell_to_particle();
 
   // Basis evaluations, shape (np, space_dimension, value_size)
   const auto [basis_evals, basis_shape]
-      = leopart::utils::evaluate_basis_functions<T>(
-          *f->function_space(), pax.x().data(), pax.particle_to_cell());
+      = leopart::utils::evaluate_basis_functions<U>(
+          *f->function_space(), pax.x().data(), pax.x().value_size(),
+          pax.particle_to_cell());
   const mdspan_t<const T, 3> basis_evals_md(basis_evals.data(), basis_shape);
 
   // Assemble and solve Q^T Q u = Q^T L in each cell, where
@@ -159,9 +162,12 @@ void transfer_to_function_l2_callback(
   //  QT . Q: (space_dimension x space_dimension)
   //  L: (n_p x block_size)
   //  QT . L: (space_dimension x block_size)
+  const std::vector<std::size_t> no_particles;
   for (std::int32_t c = 0; c < ncells; ++c)
   {
-    const std::vector<std::size_t> cell_particles = cell_to_particle[c];
+    const std::vector<std::size_t>& cell_particles
+      = (static_cast<std::size_t>(c) < cell_to_particle.size())
+        ? cell_to_particle[c] : no_particles;
     const std::size_t cell_np = cell_particles.size();
 
     // Assemble Q
@@ -258,7 +264,7 @@ void transfer_to_function_constrained(
     const Field<T>& field, const T l, const T u)
 {
   assert(f->function_space()->element());
-  std::shared_ptr<const dolfinx::fem::FiniteElement<T>> element
+  std::shared_ptr<const dolfinx::fem::FiniteElement<U>> element
       = f->function_space()->element();
   assert(element);
   const int block_size = element->block_size();
