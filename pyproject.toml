@@ -60,7 +60,7 @@ extend-select = [
   "ISC",         # flake8-implicit-str-concat
   "SLOT",        # flake8-slots
   "TID",         # flake8-tidy-imports
-  "TCH",         # flake8-type-checking
+  "TC",         # flake8-type-checking
   "INT",         # flake8-gettext
   "TD",          # flake8-todos
   "FIX",         # flake8-fixme

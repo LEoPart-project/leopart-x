@@ -80,9 +80,12 @@ mu = eta_light + C * (eta_dense - eta_light)
 Rb = dolfinx.fem.Constant(mesh, 1.0)
 f = Rb * C * ufl.as_vector((0, -1))
 
+
 class Scheme(enum.Enum):
     c0sipg = enum.auto()
     taylor_hood = enum.auto()
+
+
 scheme = Scheme.taylor_hood
 
 if scheme is Scheme.taylor_hood:
@@ -270,9 +273,12 @@ uspd_expr = dolfinx.fem.Expression(
     ufl.sqrt(ufl.inner(uh, uh)), Vspd.element.interpolation_points)
 
 urms_form = dolfinx.fem.form(ufl.inner(uh, uh) * ufl.dx)
+
+
 def compute_urms():
     return mesh.comm.allreduce(
         dolfinx.fem.assemble_scalar(urms_form), op=MPI.SUM) ** 0.5
+
 
 # Main time loop
 t = 0.0

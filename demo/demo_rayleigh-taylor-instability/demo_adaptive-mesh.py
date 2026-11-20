@@ -122,6 +122,8 @@ def refine_mesh(mesh):
 
 
 rng = np.random.default_rng()
+
+
 def balance_ptcls(ptcls, mesh, np_min, np_max):
     """
     To encourage efficiency and appropriate resolution we add and remove
@@ -421,6 +423,7 @@ class Problem:
         uspd.interpolate(uspd_expr)
         max_u_vec = uspd.x.petsc_vec.norm(PETSc.NormType.INF)
         return c_cfl * h / max_u_vec
+
 
 # h measured used in CFL criterion estimation
 h_measure = mesh0.h(

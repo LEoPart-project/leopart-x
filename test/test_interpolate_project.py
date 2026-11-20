@@ -146,7 +146,7 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     # Mesh mush align with discontinuity
     nele = 4
     x0 = 0.5
-    assert (nele * x0) % 2.0 == 0.0
+    assert np.isclose((nele * x0) % 2.0, 0.0)
 
     mesh = create_mesh(cell_type, dtype, 4)
     Q = dolfinx.fem.functionspace(mesh, ("DG", k))
@@ -211,9 +211,9 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
         p = pyleopart.Particles(x, c)
 
         # Function is exactly represented in FE space
-        def func(x):
+        def func(x, gdim=mesh.geometry.dim):
             return np.prod(
-                [np.sin(np.pi * x[d]) for d in range(mesh.geometry.dim)],
+                [np.sin(np.pi * x[d]) for d in range(gdim)],
                 axis=0)
 
         p.add_field("v", [1])

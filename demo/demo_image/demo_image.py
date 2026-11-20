@@ -91,6 +91,7 @@ problem = dolfinx.fem.petsc.NonlinearProblem(
         "pc_type": "lu",
         "pc_factor_mat_solver_type": "mumps"})
 
+
 # Utility functions for storing snapshot data
 def create_timestamp(t):
     return f"t={t:.2e}"

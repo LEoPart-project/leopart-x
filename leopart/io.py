@@ -10,8 +10,7 @@ import xml.etree.ElementTree as ET
 from mpi4py import MPI
 
 import adios2
-import numpy as np
-import numpy.typing
+import numpy.typing as npt
 
 import dolfinx
 import leopart.cpp
@@ -81,7 +80,7 @@ class XDMFParticlesFile:
 
     def _append_xml_node(
             self, nglobal: int, gdim_pts: int, t: float, t_str: str,
-            data_map: typing.Dict[str, np.typing.NDArray]):
+            data_map: dict[str, npt.NDArray]):
         domain = self.temporal_grid
         grid = ET.SubElement(domain, "Grid")
         time = ET.SubElement(grid, "Time")
@@ -112,7 +111,7 @@ class XDMFParticlesFile:
 
     def write_particles(
             self, particles: leopart.cpp.Particles, t: float,
-            field_names: typing.Optional[typing.Sequence[str]] = None):
+            field_names: typing.Sequence[str] | None = None):
         """
         Write the particle data to file along with the provided fields' data.
 
@@ -131,8 +130,8 @@ class XDMFParticlesFile:
         self.write_points(particles.x().data()[active_pidxs], data_map, t)
 
     def write_points(
-            self, points: np.typing.NDArray,
-            data_map: typing.Dict[str, np.typing.NDArray],
+            self, points: npt.NDArray,
+            data_map: dict[str, npt.NDArray],
             t: float):
         """
         Write a point cloud with associated data to file.

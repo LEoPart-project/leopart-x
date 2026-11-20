@@ -5,4 +5,4 @@
 
 # DOLFINx must be imported before the LEoPart-x C++ module so that
 # DOLFINx's nanobind types (Mesh, Function, ...) are registered.
-import dolfinx  # noqa: F401
+import dolfinx  # ruff: ignore[unused-import]
