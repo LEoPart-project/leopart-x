@@ -7,10 +7,10 @@ on:
   pull_request:
     branches:
       - main
-  schedule:
-    # Nightly test against DOLFINx main
-    - cron: "0 3 * * *"
   workflow_dispatch:
+
+# Testing against DOLFINx main is done separately in nightly.yml as an
+# indicator only; it is not run on pull requests and does not gate merging.
 
 jobs:
   lint:
@@ -27,9 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dolfinx: ["v0.11.0", "nightly"]
-    # Breakage against DOLFINx main should not block merging
-    continue-on-error: ${{ matrix.dolfinx == 'nightly' }}
+        dolfinx: ["v0.11.0"]
     container: dolfinx/dolfinx:${{ matrix.dolfinx }}
     env:
       OMPI_ALLOW_RUN_AS_ROOT: 1
@@ -57,7 +55,6 @@ jobs:
         run: mpirun -np 3 python3 -m pytest -v .
 
       - name: Run demos
-        if: matrix.dolfinx == 'v0.11.0'
         working-directory: demo
         run: |
           python3 demo_advection-l2-projection.py

@@ -1,6 +1,7 @@
 # LEoPart-x
 
 ![](https://github.com/LEoPart-project/leopart-x/actions/workflows/ccpp.yml/badge.svg)
+[![nightly](https://github.com/LEoPart-project/leopart-x/actions/workflows/nightly.yml/badge.svg)](https://github.com/LEoPart-project/leopart-x/actions/workflows/nightly.yml)
 
 LEoPart-x (**L**agrangian-**E**ulerian **o**n **Part**icles-x) integrates
 particle functionality into the open-source finite element library
