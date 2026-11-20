@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
+#include <iterator>
 #include <map>
 #include <ranges>
 #include <span>
@@ -112,7 +113,12 @@ public:
       };
     auto v = std::views::iota((std::size_t) 0, _particle_to_cell.size())
            | std::views::filter(is_pidx_valid);
-    return std::vector<std::size_t>(v.begin(), v.end());
+    // Note: iota_view<std::size_t> iterators are not Cpp17 iterators (their
+    // difference_type is an integer-class type), so they cannot be passed
+    // to std::vector's iterator-pair constructor.
+    std::vector<std::size_t> pidxs;
+    std::ranges::copy(v, std::back_inserter(pidxs));
+    return pidxs;
   }
 
   /// Given a process local particle index, return the owning cell and cell

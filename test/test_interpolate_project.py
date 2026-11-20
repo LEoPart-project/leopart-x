@@ -35,7 +35,7 @@ def test_find_deficient_cells(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
     Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
-    npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
+    npart = Q.dofmap.dof_layout.num_dofs
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
@@ -72,7 +72,7 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
     Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
-    npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
+    npart = Q.dofmap.dof_layout.num_dofs
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
@@ -109,7 +109,7 @@ def test_transfer_to_function(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
     Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
-    npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
+    npart = Q.dofmap.dof_layout.num_dofs
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
@@ -167,7 +167,7 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     uh_exact.x.array[:] = x0
     cells = dolfinx.mesh.locate_entities(
         mesh, mesh.topology.dim, lambda x: x[0] < x0 + np.finfo(dtype).eps)
-    uh_exact.interpolate(constrained_func, cells=cells)
+    uh_exact.interpolate(constrained_func, cells0=cells)
     uh_exact.x.scatter_forward()
 
     # Set the particle data to the *un*constrained function
@@ -202,8 +202,7 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
         Q = dolfinx.fem.functionspace(mesh, ("DG", k))
         Q_high = dolfinx.fem.functionspace(mesh, ("DG", k))
 
-        dofs_per_cell = Q.dofmap.dof_layout.num_entity_closure_dofs(
-            mesh.topology.dim)
+        dofs_per_cell = Q.dofmap.dof_layout.num_dofs
         npart = 2 * dofs_per_cell
 
         x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
