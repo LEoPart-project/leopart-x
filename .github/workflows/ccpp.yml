@@ -1,27 +1,61 @@
-name: C/C++ CI
+name: CI
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+
+# Testing against DOLFINx main is done separately in nightly.yml as an
+# indicator only; it is not run on pull requests and does not gate merging.
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python lint
+        run: |
+          pip3 install ruff
+          ruff check --preview .
+
   build:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:v0.7.2
+    strategy:
+      fail-fast: false
+      matrix:
+        dolfinx: ["v0.11.0"]
+    container: dolfinx/dolfinx:${{ matrix.dolfinx }}
+    env:
+      OMPI_ALLOW_RUN_AS_ROOT: 1
+      OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
     steps:
-    - uses: actions/checkout@v4
-    - name: Python lint
-      run: |
-        pip3 install ruff
-        ruff check --preview .
-    - name: build
-      run: pip3 install .
-    - name: test serial
-      run: |
-        cd test
-        python3 -m pytest -s -v .
-    - name: test parallel
-      run: |
-        cd test
-        mpirun -np 2 python3 -m pytest -s -v .
+      - uses: actions/checkout@v4
+
+      # Build against the nanobind and scikit-build-core installed in the
+      # container so the nanobind ABI matches DOLFINx's Python interface
+      - name: Build
+        run: |
+          pip3 install -v --no-build-isolation --no-deps \
+            --config-settings=cmake.define.LEOPART_WERROR=ON .
+
+      - name: Test (serial)
+        working-directory: test
+        run: python3 -m pytest -v .
+
+      - name: Test (2 ranks)
+        working-directory: test
+        run: mpirun -np 2 python3 -m pytest -v .
+
+      - name: Test (3 ranks)
+        working-directory: test
+        run: mpirun -np 3 python3 -m pytest -v .
+
+      - name: Run demos
+        working-directory: demo
+        run: |
+          python3 demo_advection-l2-projection.py
+          mpirun -np 2 python3 demo_particle-io.py

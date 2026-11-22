@@ -27,7 +27,11 @@ Particles<T>::Particles(const std::vector<T>& x,
   }
   _cell_to_particle.resize(max_cell + 1);
   for (std::size_t p = 0; p < cells.size(); ++p)
+  {
+    if (cells[p] == INVALID_CELL)
+      continue;
     _cell_to_particle[cells[p]].push_back(p);
+  }
 
   // Create position data field
   std::copy(x.cbegin(), x.cend(), _x.data().begin());
@@ -106,8 +110,9 @@ void Particles<T>::relocate_bbox_on_proc(
   dolfinx::common::Timer timer("leopart::Particles::relocate_bbox_on_proc");
 
   // Resize member if required, TODO: Handle ghosts
+  const int tdim = mesh.topology()->dim();
   std::shared_ptr<const dolfinx::common::IndexMap> map =
-    mesh.topology()->index_map(mesh.topology()->dim());
+    mesh.topology()->index_map(tdim);
   const std::size_t total_cells = map->size_local();
   if (_cell_to_particle.size() < total_cells)
     _cell_to_particle.resize(total_cells);
@@ -116,22 +121,17 @@ void Particles<T>::relocate_bbox_on_proc(
   std::vector<std::int32_t> cells(total_cells);
   std::iota(cells.begin(), cells.end(), 0);
   dolfinx::geometry::BoundingBoxTree<T> tree(
-    mesh, mesh.topology()->dim(), cells);
+    mesh, tdim, 0.0, std::span<const std::int32_t>(cells));
 
-  // Get positions of required pidxs
-  std::span<const T> xp_all = _x.data();
-  const std::size_t gdim = _x.value_shape()[0];
-  std::vector<T> xp(pidxs.size() * gdim, 0.0);
-  for (std::size_t i = 0; i < pidxs.size(); ++i)
-  {
-    std::copy_n(xp_all.begin() + pidxs[i] * gdim, gdim, xp.begin() + i * gdim);
-  }
+  // Get positions of required pidxs, padded to 3 components
+  const std::vector<T> xp = positions_padded(pidxs);
 
   dolfinx::common::Timer timer1("leopart::Particles::relocate_bbox_on_proc collisions");
   dolfinx::graph::AdjacencyList<std::int32_t> cell_candidates =
-    dolfinx::geometry::compute_collisions<T>(tree, xp);
+    dolfinx::geometry::compute_collisions<T>(tree, std::span<const T>(xp));
   dolfinx::graph::AdjacencyList<std::int32_t> cells_collided =
-    dolfinx::geometry::compute_colliding_cells<T>(mesh, cell_candidates, xp);
+    dolfinx::geometry::compute_colliding_cells<T>(
+      mesh, cell_candidates, std::span<const T>(xp));
   timer1.stop();
 
   dolfinx::common::Timer timer2("leopart::Particles::relocate_bbox_on_proc post process");
@@ -166,6 +166,8 @@ void Particles<T>::relocate_bbox_on_proc(
   for (const std::size_t pidx : lost)
   {
     const auto [old_cell, local_pidx] = global_to_local(pidx);
+    if (old_cell == INVALID_CELL)
+      continue;
     delete_particle(old_cell, local_pidx);
   }
   timer2.stop();
@@ -183,7 +185,7 @@ void Particles<T>::relocate_bbox(
     return;
   }
   const std::int32_t rank = dolfinx::MPI::rank(mesh.comm());
-  const std::size_t gdim = _x.value_shape()[0];
+  const std::size_t xdim = _x.value_size();
 
   // Resize member if required, TODO: Handle ghosts
   std::shared_ptr<const dolfinx::common::IndexMap> map =
@@ -211,7 +213,8 @@ void Particles<T>::relocate_bbox(
       if (src_owner[i] < 0)
         lost.push_back(pidxs[i]);
       const auto [cell, local_pidx] = global_to_local(pidxs[i]);
-      delete_particle(cell, local_pidx);
+      if (cell != INVALID_CELL)
+        delete_particle(cell, local_pidx);
     }
     else
       pidxs_on_proc.push_back(pidxs[i]);
@@ -232,8 +235,11 @@ void Particles<T>::relocate_bbox(
 
       // Particle changed cell: update old and new cells' particles
       const auto [old_cell, local_pidx] = global_to_local(pidx);
-      std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
-      cps.erase(cps.begin() + local_pidx);
+      if (old_cell != INVALID_CELL)
+      {
+        std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
+        cps.erase(cps.begin() + local_pidx);
+      }
       _cell_to_particle[new_cell].push_back(pidx);
 
       // Update particle's cell
@@ -241,9 +247,10 @@ void Particles<T>::relocate_bbox(
     }
     else
     {
-      // Particle came from another process
+      // Particle came from another process. Communicated points are
+      // padded to 3 components.
       const std::size_t new_pidx = add_particle(
-        dest_points_span.subspan(i * gdim, gdim), new_cell);
+        dest_points_span.subspan(i * 3, xdim), new_cell);
       for (const auto& [field_name, field_data] : dest_data)
       {
         const std::size_t field_vs = field(field_name).value_size();
@@ -299,18 +306,12 @@ Particles<T>::determine_point_ownership(
   // NOTE: Should we send the cells in as input?
   std::vector<std::int32_t> cells(num_cells, 0);
   std::iota(cells.begin(), cells.end(), 0);
-  BoundingBoxTree bb(mesh, tdim, cells, padding);
-  BoundingBoxTree midpoint_tree = create_midpoint_tree(mesh, tdim, cells);
-  BoundingBoxTree global_bbtree = bb.create_global_tree(comm);
+  BoundingBoxTree<T> bb(
+    mesh, tdim, padding, std::span<const std::int32_t>(cells));
+  BoundingBoxTree<T> global_bbtree = bb.create_global_tree(comm);
 
-  // Get positions of required pidxs
-  std::span<const T> xp_all = _x.data();
-  const std::size_t gdim = _x.value_shape()[0];
-  std::vector<T> points(pidxs.size() * gdim, 0.0);
-  for (std::size_t i = 0; i < pidxs.size(); ++i)
-  {
-    std::copy_n(xp_all.begin() + pidxs[i] * gdim, gdim, points.begin() + i * gdim);
-  }
+  // Get positions of required pidxs, padded to 3 components
+  const std::vector<T> points = positions_padded(pidxs);
 
   // Compute collisions:
   // For each point in `x` get the processes it should be sent to
@@ -407,8 +408,8 @@ Particles<T>::determine_point_ownership(
     std::vector<T> received_data((std::size_t)recv_offsets.back());
     MPI_Neighbor_alltoallv(
         send_data.data(), send_sizes.data(), send_offsets.data(),
-        dolfinx::MPI::mpi_type<T>(), received_data.data(), recv_sizes.data(),
-        recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), forward_comm);
+        dolfinx::MPI::mpi_t<T>, received_data.data(), recv_sizes.data(),
+        recv_offsets.data(), dolfinx::MPI::mpi_t<T>, forward_comm);
 
     return {
       .value_size=value_size,
@@ -450,7 +451,7 @@ Particles<T>::determine_point_ownership(
   if (geometry.cmaps().size() > 1)
     throw std::runtime_error("Mixed topology not supported");
   std::span<const T> geom_dofs = geometry.x();
-  auto x_dofmap = geometry.dofmap();
+  auto x_dofmap = geometry.dofmaps().front();
 
   // Compute candidate cells for collisions (and extrapolation)
   const graph::AdjacencyList<std::int32_t> candidate_collisions
@@ -571,18 +572,17 @@ Particles<T>::determine_point_ownership(
       std::int32_t closest_cell = -1;
       for (auto cell : candidate_collisions.links(i))
       {
-        auto dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::
-            MDSPAN_IMPL_PROPOSED_NAMESPACE::submdspan(
-                x_dofmap, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+        auto dofs = md::submdspan(x_dofmap, cell, md::full_extent);
         std::vector<T> nodes(3 * dofs.size());
         for (std::size_t j = 0; j < dofs.size(); ++j)
         {
-          const int pos = 3 * dofs[j];
+          const std::size_t pos = 3 * dofs[j];
           for (std::size_t k = 0; k < 3; ++k)
             nodes[3 * j + k] = geom_dofs[pos + k];
         }
         const std::array<T, 3> d = compute_distance_gjk<T>(
-            std::span<const T>(point.data(), point.size()), nodes);
+            std::span<const T>(point.data(), point.size()),
+            std::span<const T>(nodes));
         if (T current_distance = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
             current_distance < shortest_distance)
         {
@@ -602,8 +602,8 @@ Particles<T>::determine_point_ownership(
   std::vector<T> recv_distances(res_x.recv_offsets.back());
   MPI_Neighbor_alltoallv(
       squared_distances.data(), res_x.send_sizes.data(), res_x.send_offsets.data(),
-      dolfinx::MPI::mpi_type<T>(), recv_distances.data(), res_x.recv_sizes.data(),
-      res_x.recv_offsets.data(), dolfinx::MPI::mpi_type<T>(), reverse_comm);
+      dolfinx::MPI::mpi_t<T>, recv_distances.data(), res_x.recv_sizes.data(),
+      res_x.recv_offsets.data(), dolfinx::MPI::mpi_t<T>, reverse_comm);
 
   // Update point ownership with extrapolation information
   std::vector<T> closest_distance(res_x.unpack_map.size(),
@@ -645,9 +645,9 @@ Particles<T>::determine_point_ownership(
   std::vector<std::int32_t> dest_ranks(res_x.recv_offsets.back());
   MPI_Neighbor_alltoallv(
       send_owners.data(), res_x.send_sizes.data(), res_x.send_offsets.data(),
-      dolfinx::MPI::mpi_type<std::int32_t>(), dest_ranks.data(),
+      dolfinx::MPI::mpi_t<std::int32_t>, dest_ranks.data(),
       res_x.recv_sizes.data(), res_x.recv_offsets.data(),
-      dolfinx::MPI::mpi_type<std::int32_t>(), forward_comm);
+      dolfinx::MPI::mpi_t<std::int32_t>, forward_comm);
 
   timer6.stop();
   // -----------------------------------------------------------------------
@@ -704,7 +704,9 @@ void Particles<T>::generate_minimum_particles_per_cell(
 {
   const std::int32_t num_cells = mesh.topology()->index_map(
     mesh.topology()->dim())->size_local();
-  
+  if (_cell_to_particle.size() < static_cast<std::size_t>(num_cells))
+    _cell_to_particle.resize(num_cells);
+
   std::vector<std::int32_t> cells_to_populate;
   std::vector<std::size_t> np_per_cell_vec;
   for (std::int32_t i = 0; i < num_cells; ++i)
@@ -719,11 +721,16 @@ void Particles<T>::generate_minimum_particles_per_cell(
   const auto [xp_new, p2cell_new] = leopart::generation::mesh_fill(
     mesh, np_per_cell_vec, cells_to_populate);
   
-  const int gdim = mesh.geometry().dim();
+  // Generated points have gdim components, whereas the particles may
+  // store a different number (e.g. 2D positions padded to 3 components)
+  const std::size_t gdim = mesh.geometry().dim();
+  const std::size_t xdim = _x.value_size();
+  const std::size_t ncopy = std::min(gdim, xdim);
+  std::vector<T> x(xdim, 0.0);
   const std::size_t num_new_p = p2cell_new.size();
   for (std::size_t pidx = 0; pidx < num_new_p; ++pidx)
   {
-    std::span<const T> x(xp_new.data() + pidx * gdim, gdim);
+    std::copy_n(xp_new.begin() + pidx * gdim, ncopy, x.begin());
     add_particle(x, p2cell_new[pidx]);
   }
 }

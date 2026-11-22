@@ -6,10 +6,17 @@
 #pragma once
 
 #include "Field.h"
-#include <vector>
-#include <stdexcept>
+#include <algorithm>
+#include <concepts>
+#include <cstdint>
+#include <iterator>
 #include <map>
 #include <ranges>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <vector>
 
 
 namespace dolfinx
@@ -29,7 +36,10 @@ class Particles
 {
 public:
   /// Initialise particles with position, the index of the containing cell
-  /// and geometric dimension of the data.
+  /// and the number of components stored per position (2 or 3).
+  /// Positions are stored with gdim components per particle. Routines
+  /// which interface with DOLFINx geometry pad these to three components
+  /// internally.
   Particles(
     const std::vector<T>& x, const std::vector<std::int32_t>& cells,
     const std::size_t gdim);
@@ -103,19 +113,43 @@ public:
       };
     auto v = std::views::iota((std::size_t) 0, _particle_to_cell.size())
            | std::views::filter(is_pidx_valid);
-    return std::vector<std::size_t>(v.begin(), v.end());
+    // Note: iota_view<std::size_t> iterators are not Cpp17 iterators (their
+    // difference_type is an integer-class type), so they cannot be passed
+    // to std::vector's iterator-pair constructor.
+    std::vector<std::size_t> pidxs;
+    std::ranges::copy(v, std::back_inserter(pidxs));
+    return pidxs;
   }
 
   /// Given a process local particle index, return the owning cell and cell
   /// local index.
-  inline std::pair<const std::int32_t, const std::size_t> global_to_local(
+  inline std::pair<std::int32_t, std::size_t> global_to_local(
     std::size_t p_global) const
   {
     const std::int32_t p_cell = _particle_to_cell[p_global];
+    if (p_cell == INVALID_CELL)
+      return {INVALID_CELL, 0};
     std::span<const std::size_t> cell_ps = _cell_to_particle[p_cell];
     const std::size_t p_local = std::distance(cell_ps.begin(),
       std::find(cell_ps.begin(), cell_ps.end(), p_global));
     return {p_cell, p_local};
+  }
+
+  /// Gather the positions of the provided particles, padded with zeros
+  /// to three components per particle as required by DOLFINx's geometry
+  /// routines.
+  ///
+  /// @param pidxs Process local particle indices
+  /// @return Positions, shape `(pidxs.size(), 3)`, row-major
+  std::vector<T> positions_padded(std::span<const std::size_t> pidxs) const
+  {
+    const std::size_t xdim = _x.value_size();
+    const std::size_t ncopy = std::min<std::size_t>(xdim, 3);
+    std::span<const T> xp_all = _x.data();
+    std::vector<T> xp(pidxs.size() * 3, 0.0);
+    for (std::size_t i = 0; i < pidxs.size(); ++i)
+      std::copy_n(xp_all.begin() + pidxs[i] * xdim, ncopy, xp.begin() + i * 3);
+    return xp;
   }
 
   /// As relocate_bbox. Non-parallel version.

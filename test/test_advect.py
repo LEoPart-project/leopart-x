@@ -33,7 +33,7 @@ def test_advect_exact_space(tableau):
     mesh = dolfinx.mesh.create_rectangle(
         MPI.COMM_WORLD, [[-1.0, -1.0], [1.0, 1.0]], [8, 8])
 
-    V = dolfinx.fem.FunctionSpace(mesh, ("CG", 1, (mesh.geometry.dim,)))
+    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = dolfinx.fem.Function(V)
     u.interpolate(lambda x: np.stack((x[1], -x[0])))
 
@@ -73,7 +73,7 @@ def test_advect_exact_space(tableau):
                          lambda t: u._cpp_object, t, dt)
 
         active = np.where(np.array(ptcls.particle_to_cell()) != -1)[0]
-        idxs = np.array([int(idx) for idx in ptcls.field("idx").data()])[active]
+        idxs = ptcls.field("idx").data()[:, 0].astype(int)[active]
         l2_err = np.linalg.norm(ptcls.x().data()[active] - xp[idxs], axis=1)
         idxs = np.concatenate(mesh.comm.allgather(idxs))
         l2_err = np.concatenate(mesh.comm.allgather(l2_err))

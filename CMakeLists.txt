@@ -3,42 +3,69 @@
 # License: GNU Lesser GPL version 3 or any later version
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.21)
 
-project(cpp VERSION "0.7.2")
+project(leopart VERSION "0.11.0" LANGUAGES C CXX)
 
-find_package(DOLFINX REQUIRED)
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
-find_package(pybind11 CONFIG REQUIRED)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-pybind11_add_module(
-  ${PROJECT_NAME} MODULE
+option(LEOPART_WERROR "Treat compiler warnings as errors" OFF)
+
+if(WIN32)
+  # Windows requires all symbols to be manually exported.
+  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
+
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+
+# Locate Basix via its Python package (required by DOLFINx's CMake config)
+execute_process(
+  COMMAND ${Python_EXECUTABLE} -c
+    "import os, sys, basix; sys.stdout.write(os.path.dirname(basix.__file__))"
+  OUTPUT_VARIABLE BASIX_PY_DIR
+  RESULT_VARIABLE BASIX_PY_COMMAND_RESULT
+  ERROR_QUIET
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+find_package(Basix REQUIRED CONFIG HINTS ${BASIX_PY_DIR})
+find_package(DOLFINX 0.11 REQUIRED CONFIG)
+message(STATUS "Found DOLFINx at ${DOLFINX_DIR} (version ${DOLFINX_VERSION})")
+
+# Detect the installed nanobind package and import it into CMake.
+# nanobind must match the version DOLFINx's Python interface was built
+# with, so that DOLFINx objects can be passed to LEoPart-x.
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  OUTPUT_VARIABLE NB_DIR)
+list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
+find_package(nanobind CONFIG REQUIRED)
+
+nanobind_add_module(
+  cpp
+  NB_SUPPRESS_WARNINGS
+  NOMINSIZE
   leopart/cpp/wrapper.cpp
-  leopart/cpp/Particles.cpp)
+  leopart/cpp/Particles.cpp
+  leopart/cpp/external/quadprog_mdspan/QuadProg++.cc)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC dolfinx)
-target_compile_options(
-  ${PROJECT_NAME} PRIVATE
-  -Wno-comment
-  -Wall
-  -Wextra
-  -pedantic
-  -Werror
-  -Wfatal-errors
-  )
+if(DOLFINX_VERSION VERSION_GREATER_EQUAL "0.12.0.0")
+  target_link_libraries(cpp PRIVATE dolfinx::dolfinx)
+else()
+  target_link_libraries(cpp PRIVATE dolfinx)
+endif()
 
-target_include_directories(
-  ${PROJECT_NAME} PUBLIC
-  "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>/leopart/cpp")
+# Note: leopart/cpp is deliberately *not* added as an include directory.
+# Its headers are included with quotes relative to each other, and adding it
+# would let leopart/cpp/math.h shadow the system <math.h>.
 
-set(LEOPART_DIRS
-    leopart/cpp/external)
-foreach(DIR ${LEOPART_DIRS})
-  add_subdirectory(${DIR})
-endforeach()
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(cpp PRIVATE -Wall -Wextra -pedantic -Wno-comment)
+  if(LEOPART_WERROR)
+    target_compile_options(cpp PRIVATE -Werror -Wfatal-errors)
+  endif()
+endif()
 
-# Set C++23 standard
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
-
-set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
-install(TARGETS ${PROJECT_NAME} DESTINATION leopart)
+set_target_properties(cpp PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+install(TARGETS cpp LIBRARY DESTINATION leopart)

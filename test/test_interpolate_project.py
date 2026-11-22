@@ -33,9 +33,9 @@ def create_mesh(cell_type, dtype, n):
 @pytest.mark.parametrize("shape", [(1,), (2,)])
 def test_find_deficient_cells(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
-    npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
+    npart = Q.dofmap.dof_layout.num_dofs
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
@@ -70,9 +70,9 @@ def test_find_deficient_cells(k, dtype, cell_type, shape):
 @pytest.mark.parametrize("shape", [(1,), (2,)])
 def test_transfer_to_particles(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
-    npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
+    npart = Q.dofmap.dof_layout.num_dofs
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
@@ -107,9 +107,9 @@ def test_transfer_to_particles(k, dtype, cell_type, shape):
 @pytest.mark.parametrize("shape", [(1,), (2,)])
 def test_transfer_to_function(k, dtype, cell_type, shape):
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k, shape))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k, shape))
 
-    npart = Q.dofmap.dof_layout.num_entity_closure_dofs(mesh.topology.dim)
+    npart = Q.dofmap.dof_layout.num_dofs
     x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
     if mesh.geometry.dim == 2:
         x = np.c_[x, np.zeros_like(x[:, 0])]
@@ -146,10 +146,10 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     # Mesh mush align with discontinuity
     nele = 4
     x0 = 0.5
-    assert (nele * x0) % 2.0 == 0.0
+    assert np.isclose((nele * x0) % 2.0, 0.0)
 
     mesh = create_mesh(cell_type, dtype, 4)
-    Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
+    Q = dolfinx.fem.functionspace(mesh, ("DG", k))
 
     x, c = pyleopart.generate_at_dof_coords(Q._cpp_object)
     p = pyleopart.Particles(x, c)
@@ -167,7 +167,7 @@ def test_constrained_transfer_to_function(k, dtype, cell_type):
     uh_exact.x.array[:] = x0
     cells = dolfinx.mesh.locate_entities(
         mesh, mesh.topology.dim, lambda x: x[0] < x0 + np.finfo(dtype).eps)
-    uh_exact.interpolate(constrained_func, cells=cells)
+    uh_exact.interpolate(constrained_func, cells0=cells)
     uh_exact.x.scatter_forward()
 
     # Set the particle data to the *un*constrained function
@@ -199,11 +199,10 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
     l2_errors = np.zeros_like(num_eles, dtype=np.double)
     for run_num, n_ele in enumerate(num_eles):
         mesh = create_mesh(cell_type, dtype, n_ele)
-        Q = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
-        Q_high = dolfinx.fem.FunctionSpace(mesh, ("DG", k))
+        Q = dolfinx.fem.functionspace(mesh, ("DG", k))
+        Q_high = dolfinx.fem.functionspace(mesh, ("DG", k))
 
-        dofs_per_cell = Q.dofmap.dof_layout.num_entity_closure_dofs(
-            mesh.topology.dim)
+        dofs_per_cell = Q.dofmap.dof_layout.num_dofs
         npart = 2 * dofs_per_cell
 
         x, c = pyleopart.mesh_fill(mesh._cpp_object, npart, seed=1)
@@ -212,9 +211,9 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
         p = pyleopart.Particles(x, c)
 
         # Function is exactly represented in FE space
-        def func(x):
+        def func(x, gdim=mesh.geometry.dim):
             return np.prod(
-                [np.sin(np.pi * x[d]) for d in range(mesh.geometry.dim)],
+                [np.sin(np.pi * x[d]) for d in range(gdim)],
                 axis=0)
 
         p.add_field("v", [1])
