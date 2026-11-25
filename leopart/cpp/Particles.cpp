@@ -133,6 +133,7 @@ void Particles<T>::relocate_bbox_on_proc(
     dolfinx::geometry::compute_colliding_cells<T>(
       mesh, cell_candidates, std::span<const T>(xp));
   timer1.stop();
+  timer1.flush();
 
   dolfinx::common::Timer timer2("leopart::Particles::relocate_bbox_on_proc post process");
   std::vector<std::size_t> lost;
@@ -171,6 +172,7 @@ void Particles<T>::relocate_bbox_on_proc(
     delete_particle(old_cell, local_pidx);
   }
   timer2.stop();
+  timer2.flush();
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
@@ -340,6 +342,7 @@ Particles<T>::determine_point_ownership(
     rank_to_neighbor[out_ranks[i]] = i;
 
   timer1.stop();
+  timer1.flush();
   // -----------------------------------------------------------------------
   // Send geometry to global process colliding ranks
   // -----------------------------------------------------------------------
@@ -441,6 +444,7 @@ Particles<T>::determine_point_ownership(
   }
 
   timer2.stop();
+  timer2.flush();
   // -----------------------------------------------------------------------
   // Compute closest entities on the owning ranks
   // -----------------------------------------------------------------------
@@ -480,6 +484,7 @@ Particles<T>::determine_point_ownership(
   }
 
   timer3.stop();
+  timer3.flush();
   // -----------------------------------------------------------------------
   // Communicate reverse the squared differences
   // -----------------------------------------------------------------------
@@ -517,6 +522,7 @@ Particles<T>::determine_point_ownership(
                          reverse_comm);
 
   timer4.stop();
+  timer4.flush();
   // -----------------------------------------------------------------------
   // For each point find the owning process which minimises the square
   // distance to a cell
@@ -542,6 +548,7 @@ Particles<T>::determine_point_ownership(
   }
 
   timer5.stop();
+  timer5.flush();
   // -----------------------------------------------------------------------
   // Communicate forward the destination ranks for each point
   // -----------------------------------------------------------------------
@@ -650,6 +657,7 @@ Particles<T>::determine_point_ownership(
       dolfinx::MPI::mpi_t<std::int32_t>, forward_comm);
 
   timer6.stop();
+  timer6.flush();
   // -----------------------------------------------------------------------
   // On the destination ranks select the appropriate data and return
   // -----------------------------------------------------------------------
@@ -691,6 +699,7 @@ Particles<T>::determine_point_ownership(
   MPI_Comm_free(&reverse_comm);
 
   timer7.stop();
+  timer7.flush();
   return std::make_tuple(
     std::move(point_owners), std::move(owned_recv_ranks),
     std::move(owned_recv_points), std::move(owned_recv_cells),
