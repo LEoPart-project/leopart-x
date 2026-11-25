@@ -118,8 +118,7 @@ def refine_mesh(mesh):
     edges_to_ref = dolfinx.mesh.compute_incident_entities(
         mesh.topology, np.array(cell_markers, dtype=np.int32),
         mesh.topology.dim, 1)
-    new_mesh, _, _ = dolfinx.mesh.refine(
-        mesh, edges_to_ref, option=dolfinx.mesh.RefinementOption.none)
+    new_mesh, _, _ = dolfinx.mesh.refine(mesh, edges_to_ref)
     return new_mesh
 
 
@@ -484,3 +483,5 @@ for j in range(num_t_steps_max):
 
     if t > t_max:
         break
+
+ptcl_file.close()

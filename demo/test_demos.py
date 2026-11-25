@@ -30,4 +30,5 @@ def test_demo(demo, num_proc):
 
     # Non-interactive matplotlib backend so plt.show() does not block
     env = {**os.environ, "MPLBACKEND": "Agg"}
-    subprocess.run(cmd, cwd=demo.parent, env=env, check=True)
+    # Fail rather than hang the CI if a demo deadlocks
+    subprocess.run(cmd, cwd=demo.parent, env=env, check=True, timeout=120)

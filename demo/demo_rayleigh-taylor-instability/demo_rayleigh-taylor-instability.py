@@ -320,6 +320,9 @@ for j in range(num_t_steps_max):
     if t > t_max:
         break
 
+ptcl_file.close()
+chem_file.close()
+
 if mesh.comm.rank == 0:
     # Plot u_rms data
     import matplotlib.pyplot as plt
