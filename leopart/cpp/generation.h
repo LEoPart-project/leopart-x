@@ -5,7 +5,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cinttypes>
+#include <cstdint>
 #include <random>
 #include <span>
 #include <stdexcept>
@@ -26,19 +28,19 @@ namespace generation
 template<std::floating_point T>
 std::vector<T> random_reference(
   const dolfinx::mesh::CellType celltype,
-  const std::size_t n, const std::size_t seed);
+  const std::size_t n, std::mt19937& rgen);
 
 template<std::floating_point T>
 std::vector<T> random_reference_tetrahedron(
-  const std::size_t n, const std::size_t seed);
+  const std::size_t n, std::mt19937& rgen);
 
 template<std::floating_point T>
 std::vector<T> random_reference_triangle(
-  const std::size_t n, const std::size_t seed);
+  const std::size_t n, std::mt19937& rgen);
 
 template<std::floating_point T>
 std::vector<T> random_reference_cube(
-  const std::size_t n, const std::size_t gdim, const std::size_t seed);
+  const std::size_t n, const std::size_t gdim, std::mt19937& rgen);
 
 /// Create a set of points, distributed pro rata to the cell volumes.
 ///
@@ -50,6 +52,11 @@ std::vector<T> random_reference_cube(
 /// @param mesh Finite element mesh
 /// @param[in] np_per_cell Number of particles per cell
 /// @param[in] cells The cells in which to generate particles
+/// @param[in] seed_int Seed for the random number generator. Each cell
+/// uses its own generator seeded from `seed_int` and the cell's original
+/// (input) index, so for a given seed a cell always receives the same
+/// particles, regardless of the number of MPI ranks or which other cells
+/// are filled. If not provided, a nondeterministic seed is used.
 ///
 /// @return tuple with point coordinates, cell indices
 template<std::floating_point T>
@@ -92,6 +99,26 @@ mesh_fill(
   std::vector<std::int32_t> p_cells;
   std::vector<T> xp_all;
 
+  // Each cell's generator is seeded from (seed, original cell index) so
+  // that the particles generated in a cell are independent of the mesh
+  // partitioning and of the order in which cells are filled. If the
+  // original cell indices are unavailable, fall back to the global cell
+  // index, which is unique but depends on the partitioning.
+  const std::uint64_t seed = seed_int.value_or(std::random_device{}());
+  std::vector<std::int64_t> cell_keys(cells.size());
+  const std::vector<std::vector<std::int64_t>>& original_cell_index
+    = mesh.topology()->original_cell_index;
+  if (!original_cell_index.empty() and !original_cell_index.front().empty())
+  {
+    std::span<const std::int64_t> oci = original_cell_index.front();
+    std::ranges::transform(cells, cell_keys.begin(),
+                           [&oci](std::int32_t c) { return oci[c]; });
+  }
+  else
+  {
+    mesh.topology()->index_map(tdim)->local_to_global(cells, cell_keys);
+  }
+
   const std::size_t idxs = cells.size();
   for (std::size_t i = 0; i < idxs; ++i)
   {
@@ -100,8 +127,13 @@ mesh_fill(
 
     // Generate coordinates on reference element
     const std::array<std::size_t, 2> Xshape = {np, tdim};
-    const std::size_t seed = seed_int.value_or(std::random_device{}());
-    const std::vector<T> X = random_reference<T>(celltype[0], np, seed);
+    const std::uint64_t key = cell_keys[i];
+    std::seed_seq seq{static_cast<std::uint32_t>(seed),
+                      static_cast<std::uint32_t>(seed >> 32),
+                      static_cast<std::uint32_t>(key),
+                      static_cast<std::uint32_t>(key >> 32)};
+    std::mt19937 rgen(seq);
+    const std::vector<T> X = random_reference<T>(celltype[0], np, rgen);
 
     // Physical coordinates of the generated points
     std::vector<T> x_b(np * gdim);
@@ -160,21 +192,22 @@ mesh_fill(
 /// @tparam Position data type
 /// @param[in] celltype The DOLFINx cell type
 /// @param[in] n Number of particles per cell
+/// @param[in,out] rgen Random number generator
 ///
 /// @return Array of \f(\mathbb{R}^d\f)-coordinates
 template<std::floating_point T>
 std::vector<T> random_reference(
   const dolfinx::mesh::CellType celltype,
-  const std::size_t n, const std::size_t seed)
+  const std::size_t n, std::mt19937& rgen)
 {
   if (celltype == dolfinx::mesh::CellType::triangle)
-    return random_reference_triangle<T>(n, seed);
+    return random_reference_triangle<T>(n, rgen);
   if (celltype == dolfinx::mesh::CellType::tetrahedron)
-    return random_reference_tetrahedron<T>(n, seed);
+    return random_reference_tetrahedron<T>(n, rgen);
   if (celltype == dolfinx::mesh::CellType::quadrilateral)
-    return random_reference_cube<T>(n, 2, seed);
+    return random_reference_cube<T>(n, 2, rgen);
   if (celltype == dolfinx::mesh::CellType::hexahedron)
-    return random_reference_cube<T>(n, 3, seed);
+    return random_reference_cube<T>(n, 3, rgen);
 
   throw std::runtime_error("Unsupported cell type");
   return std::vector<T>{};
@@ -185,17 +218,17 @@ std::vector<T> random_reference(
 ///
 /// @tparam T Position data type
 /// @param[in] n Number of particles
+/// @param[in,out] rgen Random number generator
 ///
 /// @return Array of \f(\mathbb{R}^3\f)-coordinates
 template<std::floating_point T>
 std::vector<T> random_reference_tetrahedron(
-  const std::size_t n, const std::size_t seed)
+  const std::size_t n, std::mt19937& rgen)
 {
   const std::size_t gdim = 3;
   std::vector<T> p(n * gdim, 1.0);
   std::vector<T> r(gdim);
 
-  std::mt19937 rgen(seed);
   std::uniform_real_distribution<T> dist(-1.0, 1.0);
 
   for (std::size_t i = 0; i < n; ++i)
@@ -239,16 +272,16 @@ std::vector<T> random_reference_tetrahedron(
 ///
 /// @tparam T Position data type
 /// @param[in] n Number of particles
+/// @param[in,out] rgen Random number generator
 ///
 /// @return Array of \f(\mathbb{R}^2\f)-coordinates
 template<std::floating_point T>
 std::vector<T> random_reference_triangle(
-  const std::size_t n, const std::size_t seed)
+  const std::size_t n, std::mt19937& rgen)
 {
   const std::size_t gdim = 2;
   std::vector<T> p(n * gdim);
 
-  std::mt19937 rgen(seed);
   std::uniform_real_distribution<T> dist(-1.0, 1.0);
 
   std::generate(p.begin(), p.end(), [&dist, &rgen]() { return dist(rgen); });
@@ -279,20 +312,57 @@ std::vector<T> random_reference_triangle(
 /// @tparam T Position data type
 /// @param[in] n Number of particles
 /// @param[in] gdim Spatial dimension
+/// @param[in,out] rgen Random number generator
 ///
 /// @return Array of \f(\mathbb{R}^d\f)-coordinates
 template<std::floating_point T>
 std::vector<T> random_reference_cube(
-  const std::size_t n, const std::size_t gdim,
-  const std::size_t seed)
+  const std::size_t n, const std::size_t gdim, std::mt19937& rgen)
 {
   std::vector<T> p(n * gdim);
 
-  std::mt19937 rgen(seed);
   std::uniform_real_distribution<T> dist(0.0, 1.0);
 
   std::generate(p.begin(), p.end(), [&dist, &rgen]() { return dist(rgen); });
   return p;
+}
+
+/// As `random_reference` using a generator initialised with `seed`
+template<std::floating_point T>
+std::vector<T> random_reference(
+  const dolfinx::mesh::CellType celltype,
+  const std::size_t n, const std::size_t seed)
+{
+  std::mt19937 rgen(seed);
+  return random_reference<T>(celltype, n, rgen);
+}
+
+/// As `random_reference_tetrahedron` using a generator initialised with
+/// `seed`
+template<std::floating_point T>
+std::vector<T> random_reference_tetrahedron(
+  const std::size_t n, const std::size_t seed)
+{
+  std::mt19937 rgen(seed);
+  return random_reference_tetrahedron<T>(n, rgen);
+}
+
+/// As `random_reference_triangle` using a generator initialised with `seed`
+template<std::floating_point T>
+std::vector<T> random_reference_triangle(
+  const std::size_t n, const std::size_t seed)
+{
+  std::mt19937 rgen(seed);
+  return random_reference_triangle<T>(n, rgen);
+}
+
+/// As `random_reference_cube` using a generator initialised with `seed`
+template<std::floating_point T>
+std::vector<T> random_reference_cube(
+  const std::size_t n, const std::size_t gdim, const std::size_t seed)
+{
+  std::mt19937 rgen(seed);
+  return random_reference_cube<T>(n, gdim, rgen);
 }
 
 /// Create a set of points located at the DoF coordinates of a

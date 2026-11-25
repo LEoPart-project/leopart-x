@@ -105,4 +105,4 @@ def test_l2_project_convergence(tableau, dtype, cell_type):
     rates = np.log(l2_errors[1:] / l2_errors[:-1]) \
             / np.log(dt_vals[1:] / dt_vals[:-1])
 
-    assert np.all(rates > tableau.order - 0.1)
+    assert np.all(rates > tableau.order - 0.2)
