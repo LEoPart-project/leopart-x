@@ -1,0 +1,39 @@
+name: Nightly (DOLFINx main)
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: dolfinx/dolfinx:nightly
+    env:
+      OMPI_ALLOW_RUN_AS_ROOT: 1
+      OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          pip3 install -v --no-build-isolation --no-deps \
+            --config-settings=cmake.define.LEOPART_WERROR=ON .
+
+      - name: Test (serial)
+        working-directory: test
+        run: python3 -m pytest -v .
+
+      - name: Test (2 ranks)
+        working-directory: test
+        run: mpirun -np 2 python3 -m pytest -v .
+
+      - name: Test (3 ranks)
+        working-directory: test
+        run: mpirun -np 3 python3 -m pytest -v .
+
+      - name: Install demo dependencies
+        run: pip3 install imageio matplotlib scipy
+
+      - name: Run demos
+        run: python3 -m pytest -v demo

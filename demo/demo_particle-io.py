@@ -56,3 +56,5 @@ for step in range(25):
     pyleopart.rk(mesh._cpp_object, ptcls, tableau,
                  lambda t: u._cpp_object, t, dt)
     fi.write_particles(ptcls, t, fields_to_write)
+
+fi.close()

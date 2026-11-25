@@ -4,6 +4,7 @@
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
 import enum
+import os
 
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -43,7 +44,8 @@ A = 0.02                # Initial perturbation magnitude
 db = 0.2                # Initial height of light layer
 tableau = pyleopart.tableaus.order2.generic_alpha(0.5)
 t_max = 1500.0
-num_t_steps_max = 500
+# Run only a few time steps when testing on GitHub Actions
+num_t_steps_max = 3 if os.environ.get("GITHUB_ACTIONS") else 500
 nref = 1
 
 # Geometry
@@ -116,8 +118,7 @@ def refine_mesh(mesh):
     edges_to_ref = dolfinx.mesh.compute_incident_entities(
         mesh.topology, np.array(cell_markers, dtype=np.int32),
         mesh.topology.dim, 1)
-    new_mesh, _, _ = dolfinx.mesh.refine(
-        mesh, edges_to_ref, option=dolfinx.mesh.RefinementOption.none)
+    new_mesh, _, _ = dolfinx.mesh.refine(mesh, edges_to_ref)
     return new_mesh
 
 
@@ -482,3 +483,5 @@ for j in range(num_t_steps_max):
 
     if t > t_max:
         break
+
+ptcl_file.close()

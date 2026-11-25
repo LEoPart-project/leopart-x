@@ -4,6 +4,7 @@
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
 import enum
+import os
 
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -42,7 +43,8 @@ A = 0.02                # Initial perturbation magnitude
 db = 0.2                # Initial height of light layer
 tableau = pyleopart.tableaus.order3.generic_alpha(0.5)
 t_max = 86.0
-num_t_steps_max = 1500
+# Run only a few time steps when testing on GitHub Actions
+num_t_steps_max = 3 if os.environ.get("GITHUB_ACTIONS") else 1500
 
 # Geometry
 mesh = dolfinx.mesh.create_rectangle(
@@ -317,6 +319,9 @@ for j in range(num_t_steps_max):
 
     if t > t_max:
         break
+
+ptcl_file.close()
+chem_file.close()
 
 if mesh.comm.rank == 0:
     # Plot u_rms data

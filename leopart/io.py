@@ -64,10 +64,30 @@ class XDMFParticlesFile:
         elif mode in (adios2_bindings.Mode.Append, adios2_bindings.Mode.Read):
             raise NotImplementedError
 
-    def __del__(self):
+        self._closed = False
+
+    def close(self):
+        """
+        Close the file. This is collective over the communicator and should
+        be called on all processes at the same point in the program, rather
+        than relying on garbage collection, whose order may differ between
+        processes and lead to a deadlock.
+        """
+        if getattr(self, "_closed", True):
+            return
         if hasattr(self, "outfile"):
             self.outfile.Close()
         assert self.adios.RemoveIO(self.io_name)
+        self._closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def __del__(self):
+        self.close()
 
     def _write_xml(self):
         ET.indent(self.xml_doc, space="\t", level=0)
