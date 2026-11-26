@@ -1,4 +1,4 @@
-name: Nightly (DOLFINx main)
+name: Nightly
 
 on:
   schedule:
@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:nightly
+    container: dolfinx/dolfinx:v0.11.0
     env:
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
@@ -37,3 +37,21 @@ jobs:
 
       - name: Run demos
         run: python3 -m pytest -v demo
+
+      - name: Benchmarks
+        run: |
+          python3 benchmarks/run.py --size small --num-ranks 1 2 \
+            --output benchmark-results.json
+
+      - name: Compare benchmark memory with baseline
+        if: hashFiles('benchmarks/baseline.json') != ''
+        run: |
+          python3 benchmarks/compare.py benchmarks/baseline.json \
+            benchmark-results.json --max-memory-increase 0.1
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
