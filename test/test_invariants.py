@@ -10,7 +10,8 @@ where they are, which cell holds them and what data they carry. They are
 the safety net for changing the particle storage (ROADMAP.md, Phase 1),
 so they must not depend on storage order or particle indices.
 
-The helpers ``active_indices`` and ``particle_cells`` are the only code
+The helpers ``active_indices``, ``particle_cells``,
+``cell_particle_lists`` and ``delete_cell_particles`` are the only code
 here that touches the storage interface. Update them, not the tests, when
 that interface changes.
 """
@@ -41,9 +42,10 @@ NUM_CELLS = {2: 8, 3: 4}
 DOLFINX_COLLISION_TOL2 = 1e-12
 
 
-def create_mesh(cell_type):
+def create_mesh(cell_type, n=None):
     tdim = dolfinx.mesh.cell_dim(cell_type)
-    n = NUM_CELLS[tdim]
+    if n is None:
+        n = NUM_CELLS[tdim]
     if tdim == 2:
         return dolfinx.mesh.create_unit_square(
             MPI.COMM_WORLD, n, n, cell_type=cell_type)
@@ -78,6 +80,18 @@ def active_indices(ptcls):
 def particle_cells(ptcls, pidxs):
     """Process local cell containing each of the given particles."""
     return np.asarray(ptcls.particle_to_cell(), dtype=np.int32)[pidxs]
+
+
+def cell_particle_lists(ptcls):
+    """Process local indices of the particles in each cell, as recorded
+    by the cell to particle map."""
+    return [np.asarray(ps, dtype=np.int64) for ps in ptcls.cell_to_particle()]
+
+
+def delete_cell_particles(ptcls, cell):
+    """Delete every particle in a cell."""
+    for _ in range(len(ptcls.cell_to_particle()[cell])):
+        ptcls.delete_particle(cell, 0)
 
 
 def payload(gid):
@@ -161,23 +175,11 @@ def test_generated_particles_lie_in_their_cells(cell_type):
                         "Generated particle outside its cell")
 
 
-@pytest.mark.parametrize("cell_type", CELL_TYPES)
-@pytest.mark.parametrize("motion", MOTIONS.keys())
-@pytest.mark.parametrize("n_steps", [1, 3])
-def test_relocation_conserves_particles(cell_type, motion, n_steps):
-    mesh = create_mesh(cell_type)
+def check_tagged_particles(mesh, ptcls, n_global, expected_x):
+    """Check particles made by create_tagged_particles after relocation
+    onto ``mesh``. ``expected_x`` maps each particle's initial position
+    to where it should now be."""
     comm = mesh.comm
-    gdim = mesh.geometry.dim
-    move = MOTIONS[motion]
-
-    ptcls, n_global = create_tagged_particles(mesh, np_per_cell=4)
-
-    for _ in range(n_steps):
-        pidxs = active_indices(ptcls)
-        x = ptcls.x().data()
-        x[pidxs] = move(x[pidxs], gdim)
-        ptcls.relocate_bbox(mesh._cpp_object, pidxs)
-
     pidxs = active_indices(ptcls)
     gid = ptcls.field("gid").data()[pidxs, 0]
     x = ptcls.x().data()[pidxs]
@@ -189,11 +191,8 @@ def test_relocation_conserves_particles(cell_type, motion, n_steps):
     assert np.array_equal(all_gid, np.arange(n_global, dtype=np.float64))
 
     # Each particle kept its position and its data
-    expected_x = x0
-    for _ in range(n_steps):
-        expected_x = move(expected_x, gdim)
     assert_on_all_ranks(
-        comm, np.allclose(x, expected_x, rtol=0.0, atol=1e-14),
+        comm, np.allclose(x, expected_x(x0), rtol=0.0, atol=1e-14),
         "Particle position changed by relocation")
     assert_on_all_ranks(
         comm, np.allclose(w, payload(gid), rtol=0.0, atol=1e-14),
@@ -203,14 +202,97 @@ def test_relocation_conserves_particles(cell_type, motion, n_steps):
     # the tolerance of DOLFINx's compute_colliding_cells, which serial
     # relocation uses. A particle near a facet can be assigned to the
     # neighbouring cell it is up to 1e-6 outside.
+    n_cells = num_local_cells(mesh)
     cells = particle_cells(ptcls, pidxs)
-    in_range = np.all((cells >= 0) & (cells < num_local_cells(mesh)))
+    in_range = np.all((cells >= 0) & (cells < n_cells))
     assert_on_all_ranks(comm, in_range,
                         "Particle assigned to a non-local cell")
     dist2 = dolfinx.geometry.squared_distance(
         mesh, mesh.topology.dim, cells, x)
     assert_on_all_ranks(comm, np.all(dist2 < DOLFINX_COLLISION_TOL2),
                         "Particle outside its assigned cell")
+
+    # The cell to particle map lists exactly the particles in each cell,
+    # and nothing for cells the mesh does not have
+    lists = cell_particle_lists(ptcls)
+    consistent = all(
+        np.array_equal(np.sort(lists[c]) if c < len(lists) else [],
+                       np.sort(pidxs[cells == c]))
+        for c in range(n_cells))
+    assert_on_all_ranks(comm, consistent,
+                        "Cell to particle map disagrees with particle cells")
+    stale = sum(len(ps) for ps in lists[n_cells:])
+    assert_on_all_ranks(comm, stale == 0,
+                        f"{stale} particles listed in cells beyond the mesh")
+
+
+@pytest.mark.parametrize("cell_type", CELL_TYPES)
+@pytest.mark.parametrize("motion", MOTIONS.keys())
+@pytest.mark.parametrize("n_steps", [1, 3])
+def test_relocation_conserves_particles(cell_type, motion, n_steps):
+    mesh = create_mesh(cell_type)
+    gdim = mesh.geometry.dim
+    move = MOTIONS[motion]
+
+    ptcls, n_global = create_tagged_particles(mesh, np_per_cell=4)
+
+    for _ in range(n_steps):
+        pidxs = active_indices(ptcls)
+        x = ptcls.x().data()
+        x[pidxs] = move(x[pidxs], gdim)
+        ptcls.relocate_bbox(mesh._cpp_object, pidxs)
+
+    def expected_x(x0):
+        for _ in range(n_steps):
+            x0 = move(x0, gdim)
+        return x0
+
+    check_tagged_particles(mesh, ptcls, n_global, expected_x)
+
+
+@pytest.mark.parametrize("cell_type", CELL_TYPES)
+@pytest.mark.parametrize("refinement", [0.5, 2.0])
+def test_relocation_onto_another_mesh(cell_type, refinement):
+    # As when a mesh is adapted: the new mesh has a different number of
+    # cells and a different partition
+    mesh = create_mesh(cell_type)
+    ptcls, n_global = create_tagged_particles(mesh, np_per_cell=4)
+
+    n_new = round(NUM_CELLS[mesh.topology.dim] * refinement)
+    new_mesh = create_mesh(cell_type, n_new)
+    ptcls.relocate_bbox(new_mesh._cpp_object, active_indices(ptcls))
+
+    check_tagged_particles(new_mesh, ptcls, n_global, lambda x0: x0)
+
+
+@pytest.mark.parametrize("cell_type", CELL_TYPES)
+def test_new_particles_start_with_zero_data(cell_type):
+    # Particles added to refill a cell reuse the storage of deleted ones;
+    # they must not inherit the deleted particles' data
+    mesh = create_mesh(cell_type)
+    comm = mesh.comm
+    np_per_cell = 4
+    ptcls, _ = create_tagged_particles(mesh, np_per_cell)
+    ptcls.field("w").data()[:] = 7.0
+
+    emptied_cell = 0
+    delete_cell_particles(ptcls, emptied_cell)
+    ptcls.generate_minimum_particles_per_cell(mesh._cpp_object, np_per_cell)
+
+    pidxs = active_indices(ptcls)
+    cells = particle_cells(ptcls, pidxs)
+    w = ptcls.field("w").data()[pidxs]
+    new = cells == emptied_cell
+    assert_on_all_ranks(
+        comm, np.count_nonzero(new) == np_per_cell,
+        "Emptied cell not refilled")
+    # Exact comparisons: the data is zeroed or left untouched, not computed
+    assert_on_all_ranks(
+        comm, not np.any(w[new]),
+        "New particles inherited data from deleted particles")
+    assert_on_all_ranks(
+        comm, np.array_equal(w[~new], np.full_like(w[~new], 7.0)),
+        "Existing particles' data changed")
 
 
 def polynomial(x, gdim, k, n_components):
