@@ -8,6 +8,7 @@ from mpi4py import MPI
 import numpy as np
 import pytest
 
+import basix.ufl
 import dolfinx
 import leopart.cpp as pyleopart
 import ufl
@@ -236,3 +237,66 @@ def test_transfer_to_function_convergence(k, dtype, cell_type):
              / np.log(h_vals[1:] / h_vals[:-1]))
 
     assert np.all(rates > k + 0.9)
+
+
+def particles_for_projection(Q, field_shape):
+    """Particles filling Q's mesh, twice as many per cell as Q has DoFs
+    per cell, carrying a field "v" of the given shape set to one."""
+    mesh = Q.mesh
+    np_per_cell = 2 * Q.dofmap.dof_layout.num_dofs
+    x, c = pyleopart.mesh_fill(mesh._cpp_object, np_per_cell, seed=1)
+    if mesh.geometry.dim == 2:
+        x = np.c_[x, np.zeros_like(x[:, 0])]
+    p = pyleopart.Particles(x, c)
+    p.add_field("v", list(field_shape))
+    p.field("v").data()[:] = 1.0
+    return p
+
+
+@pytest.mark.parametrize("element", [("Lagrange", 1), ("Lagrange", 2),
+                                     ("Lagrange", 1, (2,))])
+def test_transfer_to_function_rejects_continuous_space(element):
+    # Shared DoFs would take the value from whichever cell was solved last
+    mesh = create_mesh(dolfinx.mesh.CellType.triangle, np.float64, 4)
+    Q = dolfinx.fem.functionspace(mesh, element)
+    p = particles_for_projection(Q, Q.value_shape or (1,))
+    u = dolfinx.fem.Function(Q)
+    with pytest.raises(RuntimeError, match="discontinuous"):
+        pyleopart.transfer_to_function(u._cpp_object, p, p.field("v"))
+
+
+@pytest.mark.parametrize("family", ["RT", "N1curl"])
+def test_transfer_to_function_rejects_vector_valued_basis(family):
+    # Discontinuous variants, so that only the vector-valued basis is at
+    # fault
+    mesh = create_mesh(dolfinx.mesh.CellType.triangle, np.float64, 4)
+    Q = dolfinx.fem.functionspace(
+        mesh, basix.ufl.element(family, mesh.basix_cell(), 1,
+                                discontinuous=True))
+    p = particles_for_projection(Q, Q.value_shape)
+    u = dolfinx.fem.Function(Q)
+    with pytest.raises(RuntimeError, match="scalar-valued basis"):
+        pyleopart.transfer_to_function(u._cpp_object, p, p.field("v"))
+
+
+@pytest.mark.parametrize(("value_shape", "field_shape"),
+                         [((), (2,)), ((2,), (1,)), ((2,), (3,))])
+def test_transfer_to_function_rejects_field_size_mismatch(
+        value_shape, field_shape):
+    mesh = create_mesh(dolfinx.mesh.CellType.triangle, np.float64, 4)
+    Q = dolfinx.fem.functionspace(mesh, ("DG", 1, value_shape))
+    p = particles_for_projection(Q, field_shape)
+    u = dolfinx.fem.Function(Q)
+    with pytest.raises(RuntimeError, match="value size"):
+        pyleopart.transfer_to_function(u._cpp_object, p, p.field("v"))
+
+
+def test_constrained_transfer_rejects_blocked_space():
+    # Only the first component would be projected
+    mesh = create_mesh(dolfinx.mesh.CellType.triangle, np.float64, 4)
+    Q = dolfinx.fem.functionspace(mesh, ("DG", 1, (2,)))
+    p = particles_for_projection(Q, (2,))
+    u = dolfinx.fem.Function(Q)
+    with pytest.raises(RuntimeError, match="block size"):
+        pyleopart.transfer_to_function_constrained(
+            u._cpp_object, p, p.field("v"), 0.0, 1.0)
