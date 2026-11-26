@@ -55,7 +55,7 @@ jobs:
       - name: Run demos
         run: python3 -m pytest -v demo
 
-      - name: Benchmarks (smoke test)
+      - name: Benchmarks
         run: |
           python3 benchmarks/run.py --cell-types triangle --num-ranks 1 2 \
             --repeats 1 --output benchmark-results.json
