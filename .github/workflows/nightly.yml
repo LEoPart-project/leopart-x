@@ -1,4 +1,4 @@
-name: Nightly (DOLFINx main)
+name: Nightly
 
 on:
   schedule:
@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:nightly
+    container: dolfinx/dolfinx:v0.11.0
     env:
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
