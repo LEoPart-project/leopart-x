@@ -63,6 +63,14 @@ std::size_t Particles<T>::add_particle(
   {
     pidx = _free_list.back();
     _free_list.pop_back();
+
+    // The reused slot still holds the deleted particle's data. Zero it,
+    // as for newly allocated slots.
+    for (auto& [f_name, f] : _fields)
+    {
+      std::span<T> f_data = f.data(pidx);
+      std::fill(f_data.begin(), f_data.end(), T(0));
+    }
   }
 
   _cell_to_particle[cell].push_back(pidx);

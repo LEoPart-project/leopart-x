@@ -68,7 +68,7 @@ public:
     return _particle_to_cell;
   }
 
-  /// Add a particle to a cell
+  /// Add a particle to a cell. All of its field values are zero.
   /// @return New particle index
   std::size_t add_particle(std::span<const T> x, std::int32_t cell);
 
