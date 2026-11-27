@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <vector>
 #include <string>
 #include <span>
@@ -72,6 +73,19 @@ public:
 
   /// Resize. Increase storage for data for new particles.
   void resize(std::size_t n)  { _data.resize(n * _value_size); };
+
+  /// Replace the data with that of particles src[0], src[1], ..., in
+  /// that order. Particles not listed in src are dropped.
+  /// @note Reallocates storage, so spans and views of the data are
+  /// invalidated.
+  void gather(std::span<const std::size_t> src)
+  {
+    std::vector<T> gathered(src.size() * _value_size);
+    for (std::size_t i = 0; i < src.size(); ++i)
+      std::copy_n(_data.begin() + src[i] * _value_size, _value_size,
+                  gathered.begin() + i * _value_size);
+    _data = std::move(gathered);
+  }
 
   /// Text name
   std::string name;

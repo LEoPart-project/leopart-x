@@ -159,6 +159,7 @@ NB_MODULE(cpp, m)
              return std::make_pair(cell, p_local);
            },
            nb::arg("p"))
+      .def("sort_by_cell", &Particles<dtype>::sort_by_cell)
       .def("cell_to_particle", &Particles<dtype>::cell_to_particle)
       .def("particle_to_cell", &Particles<dtype>::particle_to_cell)
       .def("relocate_bbox",
