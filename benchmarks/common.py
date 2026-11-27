@@ -68,6 +68,7 @@ LEOPART_TIMERS = [
     "leopart::Particles::relocate_bbox_on_proc",
     "leopart::Particles::relocate_bbox_on_proc collisions",
     "leopart::Particles::relocate_bbox_on_proc post process",
+    "leopart::Particles::sort_by_cell",
     _OWNERSHIP,
     f"{_OWNERSHIP} global collisions",
     f"{_OWNERSHIP} Send geometry to global process colliding ranks",

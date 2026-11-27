@@ -112,6 +112,60 @@ void Particles<T>::add_field(
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
+void Particles<T>::sort_by_cell()
+{
+  dolfinx::common::Timer timer("leopart::Particles::sort_by_cell");
+
+  const std::size_t num_cells = _cell_to_particle.size();
+  const std::size_t num_slots = _particle_to_cell.size();
+
+  // Count the particles in each cell, then offsets[c] is the new index
+  // of the first particle in cell c
+  std::vector<std::size_t> offsets(num_cells + 1, 0);
+  for (const std::int32_t c : _particle_to_cell)
+  {
+    if (c == INVALID_CELL)
+      continue;
+    assert(c >= 0 and static_cast<std::size_t>(c) < num_cells);
+    ++offsets[c + 1];
+  }
+  std::partial_sum(offsets.begin(), offsets.end(), offsets.begin());
+  const std::size_t num_particles = offsets.back();
+
+  // src[i] is the current index of the particle that moves to index i.
+  // Visiting particles in index order makes the sort stable.
+  std::vector<std::size_t> src(num_particles);
+  {
+    std::vector<std::size_t> next(offsets.begin(), offsets.end() - 1);
+    for (std::size_t p = 0; p < num_slots; ++p)
+    {
+      const std::int32_t c = _particle_to_cell[p];
+      if (c != INVALID_CELL)
+        src[next[c]++] = p;
+    }
+  }
+
+  // Move the particle data
+  _x.gather(src);
+  for (auto& [name, f] : _fields)
+    f.gather(src);
+
+  // Rebuild the maps between particles and cells
+  _particle_to_cell.resize(num_particles);
+  for (std::size_t c = 0; c < num_cells; ++c)
+  {
+    std::fill(_particle_to_cell.begin() + offsets[c],
+              _particle_to_cell.begin() + offsets[c + 1],
+              static_cast<std::int32_t>(c));
+    std::vector<std::size_t>& cps = _cell_to_particle[c];
+    cps.resize(offsets[c + 1] - offsets[c]);
+    std::iota(cps.begin(), cps.end(), offsets[c]);
+  }
+
+  _free_list.clear();
+}
+//------------------------------------------------------------------------
+template <std::floating_point T>
 void Particles<T>::relocate_bbox_on_proc(
   const dolfinx::mesh::Mesh<T>& mesh, std::span<const std::size_t> pidxs)
 {
@@ -181,6 +235,8 @@ void Particles<T>::relocate_bbox_on_proc(
   }
   timer2.stop();
   timer2.flush();
+
+  sort_by_cell();
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
@@ -270,6 +326,8 @@ void Particles<T>::relocate_bbox(
       }
     }
   }
+
+  sort_by_cell();
 }
 //------------------------------------------------------------------------
 /// Adapted from dolfinx::geomety::utils::determine_point_ownership

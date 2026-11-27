@@ -152,6 +152,19 @@ public:
     return xp;
   }
 
+  /// Reorder the particles so that each cell's particles are a
+  /// contiguous range of indices, in increasing cell order, and drop
+  /// deleted particles. Particles in the same cell keep their relative
+  /// order.
+  ///
+  /// Afterwards particle_to_cell() is non-decreasing with no invalid
+  /// entries, cell_to_particle()[c] is the range [offset_c, offset_{c+1}),
+  /// and the free list is empty.
+  ///
+  /// @note Changes particle indices, and reallocates the data of every
+  /// field, so previously obtained indices, spans and views are invalid.
+  void sort_by_cell();
+
   /// As relocate_bbox. Non-parallel version.
   void relocate_bbox_on_proc(
     const dolfinx::mesh::Mesh<T>& mesh,
