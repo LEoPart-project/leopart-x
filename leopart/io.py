@@ -142,12 +142,9 @@ class XDMFParticlesFile:
         """
         if field_names is None:
             field_names = []
-        active_pidxs = particles.active_pidxs()
-        data_map = dict(
-            zip(field_names,
-                (particles.field(field_name).data()[active_pidxs]
-                 for field_name in field_names)))
-        self.write_points(particles.x().data()[active_pidxs], data_map, t)
+        data_map = {field_name: particles.field(field_name).data()
+                    for field_name in field_names}
+        self.write_points(particles.x().data(), data_map, t)
 
     def write_points(
             self, points: npt.NDArray,

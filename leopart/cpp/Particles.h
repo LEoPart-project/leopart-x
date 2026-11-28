@@ -9,9 +9,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
-#include <iterator>
 #include <map>
-#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -31,6 +29,14 @@ namespace mesh
 namespace leopart
 {
 
+/// Particles in the cells of a mesh, each carrying the data of a set of
+/// fields.
+///
+/// Particles are stored sorted by cell: the particles of cell c are the
+/// contiguous range of indices given by cell_offsets(), and there are no
+/// deleted particles in storage. Any operation that adds, deletes or
+/// relocates particles keeps this so, and therefore changes particle
+/// indices and reallocates the data of every field.
 template <std::floating_point T>
 class Particles
 {
@@ -40,6 +46,10 @@ public:
   /// Positions are stored with gdim components per particle. Routines
   /// which interface with DOLFINx geometry pad these to three components
   /// internally.
+  ///
+  /// @note The particles are stored sorted by cell, so they are in the
+  /// order given only if \p cells is non-decreasing. Particles with a
+  /// negative cell are dropped.
   Particles(
     const std::vector<T>& x, const std::vector<std::int32_t>& cells,
     const std::size_t gdim);
@@ -53,28 +63,43 @@ public:
   /// Destructor
   ~Particles() = default;
 
-  /// Add a field to the particles, with name and value shape
+  /// Add a field to the particles, with name and value shape. Its
+  /// values are zero.
   void add_field(std::string name, const std::vector<std::size_t>& shape);
 
-  /// List of particles in each cell
-  const std::vector<std::vector<std::size_t>>& cell_to_particle() const
-  {
-    return _cell_to_particle;
-  }
+  /// Number of particles on this process
+  std::size_t num_particles() const { return _particle_to_cell.size(); }
 
-  /// List of unique cell assigned to enclose each particle
-  const std::vector<std::int32_t>& particle_to_cell() const
+  /// Number of cells the particles are indexed over. At least one more
+  /// than the largest cell containing a particle.
+  std::size_t num_cells() const { return _cell_offsets.size() - 1; }
+
+  /// Offsets of each cell's particles. The particles in cell c are those
+  /// with indices offsets[c], ..., offsets[c + 1] - 1. Size num_cells() + 1.
+  std::span<const std::size_t> cell_offsets() const { return _cell_offsets; }
+
+  /// Cell containing each particle. Non-decreasing.
+  std::span<const std::int32_t> particle_to_cell() const
   {
     return _particle_to_cell;
   }
 
-  /// Add a particle to a cell. All of its field values are zero.
-  /// @return New particle index
-  std::size_t add_particle(std::span<const T> x, std::int32_t cell);
+  /// Add particles. Every field of a new particle is zero.
+  ///
+  /// @param x Positions, shape `(cells.size(), x().value_size())`,
+  /// row-major
+  /// @param cells Cell containing each new particle
+  /// @return Index of each new particle, in the order given
+  /// @note Changes particle indices (see the class description).
+  /// New particles follow the existing particles of their cell.
+  std::vector<std::size_t> add_particles(
+    std::span<const T> x, std::span<const std::int32_t> cells);
 
-  /// Delete particle p in cell
-  /// @note \p p is cell-local index
-  void delete_particle(std::int32_t cell, std::size_t p_local);
+  /// Delete particles
+  ///
+  /// @param pidxs Indices of the particles to delete
+  /// @note Changes particle indices (see the class description).
+  void delete_particles(std::span<const std::size_t> pidxs);
 
   /// Access field by name (convenience)
   /// Used in Python wrapper
@@ -100,41 +125,6 @@ public:
   /// Particle positions (non-const)
   const Field<T>& x() const { return _x; };
 
-  /// Generate process local indices of valid particles, i.e., those
-  /// which have not been allocated as free for assignment with new
-  /// data.
-  inline std::vector<std::size_t> active_pidxs()
-  {
-    const auto is_pidx_valid =
-      [&invalid_cell=INVALID_CELL, &p2c=_particle_to_cell](
-        const std::size_t& p_idx)
-      {
-        return p2c[p_idx] != invalid_cell;
-      };
-    auto v = std::views::iota((std::size_t) 0, _particle_to_cell.size())
-           | std::views::filter(is_pidx_valid);
-    // Note: iota_view<std::size_t> iterators are not Cpp17 iterators (their
-    // difference_type is an integer-class type), so they cannot be passed
-    // to std::vector's iterator-pair constructor.
-    std::vector<std::size_t> pidxs;
-    std::ranges::copy(v, std::back_inserter(pidxs));
-    return pidxs;
-  }
-
-  /// Given a process local particle index, return the owning cell and cell
-  /// local index.
-  inline std::pair<std::int32_t, std::size_t> global_to_local(
-    std::size_t p_global) const
-  {
-    const std::int32_t p_cell = _particle_to_cell[p_global];
-    if (p_cell == INVALID_CELL)
-      return {INVALID_CELL, 0};
-    std::span<const std::size_t> cell_ps = _cell_to_particle[p_cell];
-    const std::size_t p_local = std::distance(cell_ps.begin(),
-      std::find(cell_ps.begin(), cell_ps.end(), p_global));
-    return {p_cell, p_local};
-  }
-
   /// Gather the positions of the provided particles, padded with zeros
   /// to three components per particle as required by DOLFINx's geometry
   /// routines.
@@ -152,32 +142,25 @@ public:
     return xp;
   }
 
-  /// Reorder the particles so that each cell's particles are a
-  /// contiguous range of indices, in increasing cell order, and drop
-  /// deleted particles. Particles in the same cell keep their relative
-  /// order.
-  ///
-  /// Afterwards particle_to_cell() is non-decreasing with no invalid
-  /// entries, cell_to_particle()[c] is the range [offset_c, offset_{c+1}),
-  /// and the free list is empty.
-  ///
-  /// @note Changes particle indices, and reallocates the data of every
-  /// field, so previously obtained indices, spans and views are invalid.
-  void sort_by_cell();
-
   /// As relocate_bbox. Non-parallel version.
   void relocate_bbox_on_proc(
     const dolfinx::mesh::Mesh<T>& mesh,
     std::span<const std::size_t> pidxs);
 
-  /// Using a bounding box tree, compute the colliding cells of the provided
-  /// global particle indices. These particles are then "relocated" to these
-  /// cells.
+  /// Using a bounding box tree, compute the colliding cells of the
+  /// provided process local particles, and assign them to those cells,
+  /// sending them to another process if it owns the cell. Particles
+  /// outside the mesh are deleted.
   ///
-  /// @note Does not check for deleted or invalid particles
+  /// Afterwards the particles are indexed over the cells of \p mesh.
+  ///
+  /// @note Changes particle indices (see the class description).
   void relocate_bbox(
     const dolfinx::mesh::Mesh<T>& mesh,
     std::span<const std::size_t> pidxs);
+
+  /// Relocate every particle, as relocate_bbox.
+  void relocate_bbox(const dolfinx::mesh::Mesh<T>& mesh);
 
   /// Adapted from dolfinx::geomety::utils::determine_point_ownership
   ///
@@ -222,19 +205,35 @@ public:
     const dolfinx::mesh::Mesh<T>& mesh, const std::size_t np_per_cell);
 
 private:
-  // Process local indices of particles in each cell.
-  std::vector<std::vector<std::size_t>> _cell_to_particle;
+  /// Marks a particle for deletion by the next sort_by_cell()
+  static constexpr std::int32_t INVALID_CELL = -1;
 
-  // Local incides of cells to which particles belong
+  /// Append n particles to the end of storage, with every field zero
+  /// and cell zero, leaving the storage unsorted until sort_by_cell().
+  /// @return Index of the first new particle
+  std::size_t append(std::size_t n);
+
+  /// Reorder the particles so that each cell's particles are a
+  /// contiguous range of indices, in increasing cell order, and drop
+  /// particles whose cell is INVALID_CELL. Particles in the same cell
+  /// keep their relative order. Restores the storage invariant after
+  /// append() or after changing particles' cells.
+  ///
+  /// @param num_cells Number of cells to index over. Increased if a
+  /// particle is in a cell beyond it.
+  /// @note Changes particle indices, and reallocates the data of every
+  /// field, so previously obtained indices, spans and views are invalid.
+  void sort_by_cell(std::size_t num_cells);
+
+  // Cell containing each particle. Non-decreasing, except between
+  // append() or a change of cell and the following sort_by_cell().
   std::vector<std::int32_t> _particle_to_cell;
 
-  // List of process local particles which have been deleted and available
-  // for reallocation
-  std::vector<std::size_t> _free_list;
+  // The particles of cell c are [_cell_offsets[c], _cell_offsets[c + 1])
+  std::vector<std::size_t> _cell_offsets;
 
   // Data in fields over particles
   Field<T> _x;
   std::map<std::string, Field<T>> _fields;
-  const std::int32_t INVALID_CELL = -1;
 };
 } // namespace leopart

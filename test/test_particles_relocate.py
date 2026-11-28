@@ -43,6 +43,6 @@ def test_relocate_single_particle_per_process(cell_type, dtype):
 
     num_expected = 4 if mesh.geometry.dim == 2 else 8
     num_expected *= mesh.comm.size
-    num_valid_p = np.sum(np.array(ptcls.particle_to_cell()) > -1)
-    global_num_valid_p = mesh.comm.allreduce(num_valid_p, op=MPI.SUM)
+    global_num_valid_p = mesh.comm.allreduce(
+        ptcls.num_particles(), op=MPI.SUM)
     assert global_num_valid_p == num_expected

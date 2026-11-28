@@ -74,7 +74,7 @@ def pad_to_3d(x):
 
 def active_indices(ptcls):
     """Process local indices of the particles that exist."""
-    return np.asarray(ptcls.active_pidxs())
+    return np.arange(ptcls.num_particles())
 
 
 def particle_cells(ptcls, pidxs):
@@ -84,14 +84,16 @@ def particle_cells(ptcls, pidxs):
 
 def cell_particle_lists(ptcls):
     """Process local indices of the particles in each cell, as recorded
-    by the cell to particle map."""
-    return [np.asarray(ps, dtype=np.int64) for ps in ptcls.cell_to_particle()]
+    by the cell offsets."""
+    offsets = ptcls.cell_offsets()
+    return [np.arange(offsets[c], offsets[c + 1])
+            for c in range(len(offsets) - 1)]
 
 
 def delete_cell_particles(ptcls, cell):
     """Delete every particle in a cell."""
-    for _ in range(len(ptcls.cell_to_particle()[cell])):
-        ptcls.delete_particle(cell, 0)
+    offsets = ptcls.cell_offsets()
+    ptcls.delete_particles(np.arange(offsets[cell], offsets[cell + 1]))
 
 
 def payload(gid):
@@ -267,8 +269,8 @@ def test_relocation_onto_another_mesh(cell_type, refinement):
 
 @pytest.mark.parametrize("cell_type", CELL_TYPES)
 def test_new_particles_start_with_zero_data(cell_type):
-    # Particles added to refill a cell reuse the storage of deleted ones;
-    # they must not inherit the deleted particles' data
+    # Particles added to refill a cell must not inherit the data of the
+    # deleted particles whose storage they may take over
     mesh = create_mesh(cell_type)
     comm = mesh.comm
     np_per_cell = 4
@@ -357,7 +359,8 @@ def test_transfer_independent_of_particle_order(cell_type, k):
     x = pad_to_3d(x)
     cells = np.asarray(cells, dtype=np.int32)
 
-    # Same particles, stored in a different order
+    # Same particles, given in a different order. Storage is sorted by
+    # cell, so this changes the order of the particles within each cell.
     perm = np.random.default_rng(seed=0).permutation(x.shape[0])
     ptcls_a = pyleopart.Particles(x, cells)
     ptcls_b = pyleopart.Particles(np.ascontiguousarray(x[perm]), cells[perm])
@@ -385,8 +388,13 @@ def test_transfer_independent_of_particle_order(cell_type, k):
         ptcls.add_field("vh", [1])
         pyleopart.transfer_to_particles(
             ptcls, ptcls.field("vh"), u["a"]._cpp_object)
-    vh_a = ptcls_a.field("vh").data()[:, 0]
-    vh_b = ptcls_b.field("vh").data()[:, 0]
+    # Match the particles of a and b by position
+    order_a = np.lexsort(ptcls_a.x().data().T)
+    order_b = np.lexsort(ptcls_b.x().data().T)
+    assert np.array_equal(ptcls_a.x().data()[order_a],
+                          ptcls_b.x().data()[order_b])
+    vh_a = ptcls_a.field("vh").data()[order_a, 0]
+    vh_b = ptcls_b.field("vh").data()[order_b, 0]
     assert_on_all_ranks(
-        mesh.comm, np.allclose(vh_a[perm], vh_b, rtol=1e-12, atol=1e-14),
+        mesh.comm, np.allclose(vh_a, vh_b, rtol=1e-12, atol=1e-14),
         "Interpolation depends on particle storage order")

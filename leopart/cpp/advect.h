@@ -328,7 +328,7 @@ void rk(
 {
   auto relocation_callback = [&mesh](leopart::Particles<T>& ptcls)
   {
-    ptcls.relocate_bbox(mesh, ptcls.active_pidxs());
+    ptcls.relocate_bbox(mesh);
   };
   rk<T>(ptcls, tableau, velocity_callback, relocation_callback, t, dt);
 };

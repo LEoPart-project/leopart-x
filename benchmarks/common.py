@@ -186,7 +186,7 @@ def velocity_function(mesh, degree):
 
 
 def num_particles_global(comm, ptcls):
-    return comm.allreduce(len(ptcls.active_pidxs()), op=MPI.SUM)
+    return comm.allreduce(ptcls.num_particles(), op=MPI.SUM)
 
 
 # ---------------------------------------------------------------------------
