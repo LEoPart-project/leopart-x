@@ -82,7 +82,7 @@ else:
 # Create particles and associate chemistry data with each particle
 pprint(f"num paticles: {xp.shape[0]}")
 ptcls = pyleopart.Particles(xp, p2cell)
-ptcls.relocate_bbox(mesh0._cpp_object, ptcls.active_pidxs())
+ptcls.relocate_bbox(mesh0._cpp_object)
 tableau.check_and_create_fields(ptcls)
 chem_label = "C"
 ptcls.add_field(chem_label, [1])
@@ -104,12 +104,12 @@ def refine_mesh(mesh):
     basic scheme for refining the mesh at the two species' interface.
     """
     # Determine if the chemistry data in each cell is uniform
-    ptcls.relocate_bbox(mesh._cpp_object, ptcls.active_pidxs())
-    c2p = ptcls.cell_to_particle()
+    ptcls.relocate_bbox(mesh._cpp_object)
+    offsets = ptcls.cell_offsets()
     C_data = np.asarray(ptcls.field("C").data(), dtype=np.int32)
     cell_markers = []
     for c in range(mesh.topology.index_map(mesh.topology.dim).size_local):
-        C_vals = np.unique(C_data[np.array(c2p[c], dtype=int)])
+        C_vals = np.unique(C_data[offsets[c]:offsets[c + 1]])
         if C_vals.shape[0] > 1:
             cell_markers.append(c)
 
@@ -136,37 +136,33 @@ def balance_ptcls(ptcls, mesh, np_min, np_max):
         np_min: Minimum number of particles per cell
         np_max: Maximum number of particles per cell
     """
-    # Remove particles from overpopulated cells
-    c2p = ptcls.cell_to_particle()
-    np_per_cell = list(map(len, c2p))
+    # Remove randomly chosen particles from overpopulated cells
+    offsets = ptcls.cell_offsets()
     num_cells = mesh.topology.index_map(mesh.topology.dim).size_local
+    to_delete = []
     for c in range(num_cells):
-        np_this_cell = np_per_cell[c]
-        for j in range(np_max, np_this_cell):
-            ptcls.delete_particle(c, rng.integers(np_this_cell))
-            np_this_cell -= 1
+        np_this_cell = offsets[c + 1] - offsets[c]
+        if np_this_cell > np_max:
+            to_delete.append(offsets[c] + rng.choice(
+                np_this_cell, np_this_cell - np_max, replace=False))
+    if to_delete:
+        ptcls.delete_particles(np.concatenate(to_delete))
 
     # Determine the cells to populate with additional particles
-    cells_to_populate = []
-    np_per_cell_vec = []
-    for c in range(num_cells):
-        if len(c2p[c]) < np_min:
-            cells_to_populate += [c]
-            np_per_cell_vec += [np_min - len(c2p[c])]
+    np_per_cell = np.diff(ptcls.cell_offsets())[:num_cells]
+    cells_to_populate = np.flatnonzero(np_per_cell < np_min).astype(np.int32)
+    np_per_cell_vec = (np_min - np_per_cell[cells_to_populate]).tolist()
     xp_new, p2c_new = pyleopart.mesh_fill(
-        mesh._cpp_object, np_per_cell_vec, cells_to_populate)
+        mesh._cpp_object, np_per_cell_vec, cells_to_populate.tolist())
     xp_new = np.c_[xp_new, np.zeros_like(xp_new[:, 0])]
 
     # Add new particles where their data is assigned to be identical to the
-    # data of the closest existing particle
-    active_pidxs = ptcls.active_pidxs()
-    active_pts = ptcls.x().data()[active_pidxs]
-    kdtree = scipy.spatial.cKDTree(active_pts)
-    closest_pidxs = active_pidxs[kdtree.query(xp_new)[1]]
-
-    for xp, c, closest in zip(xp_new, p2c_new, closest_pidxs):
-        new_pidx = ptcls.add_particle(xp, c)
-        ptcls.field("C").data()[new_pidx] = ptcls.field("C").data()[closest]
+    # data of the closest existing particle. Adding particles changes the
+    # indices of existing ones, so look up the data first.
+    kdtree = scipy.spatial.cKDTree(ptcls.x().data())
+    C_new = ptcls.field("C").data()[kdtree.query(xp_new)[1]]
+    new_pidxs = ptcls.add_particles(xp_new, p2c_new)
+    ptcls.field("C").data()[new_pidxs] = C_new
 
 
 class Problem:
@@ -196,13 +192,13 @@ class Problem:
         if do_refine:
             for i in range(nref):
                 new_mesh = refine_mesh(new_mesh)
-        ptcls.relocate_bbox(new_mesh._cpp_object, ptcls.active_pidxs())
+        ptcls.relocate_bbox(new_mesh._cpp_object)
         mesh = new_mesh
 
         # Project the chemistry data into a continuum approximation
         chem_space = dolfinx.fem.functionspace(mesh, ("DG", 0))
         C = dolfinx.fem.Function(chem_space)
-        ptcls.relocate_bbox(mesh._cpp_object, ptcls.active_pidxs())
+        ptcls.relocate_bbox(mesh._cpp_object)
 
         # Check for cells which are deficient of particle data required for
         # the projection
@@ -401,7 +397,7 @@ class Problem:
         Args:
             ptcls: Particles to relocate
         """
-        ptcls.relocate_bbox(self.last_mesh._cpp_object, ptcls.active_pidxs())
+        ptcls.relocate_bbox(self.last_mesh._cpp_object)
 
     def estimate_dt(self, h, c_cfl):
         """
@@ -455,9 +451,9 @@ for j in range(num_t_steps_max):
         if do_refine:
             for i in range(nref):
                 new_mesh = refine_mesh(new_mesh)
-        ptcls.relocate_bbox(new_mesh._cpp_object, ptcls.active_pidxs())
+        ptcls.relocate_bbox(new_mesh._cpp_object)
         balance_ptcls(ptcls, new_mesh, np_min=50, np_max=55)
-        ptcls.relocate_bbox(mesh0._cpp_object, ptcls.active_pidxs())
+        ptcls.relocate_bbox(mesh0._cpp_object)
     pyleopart.rk(ptcls, tableau, problem.velocity, problem.relocator, t, dt)
     t += dt
 

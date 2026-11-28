@@ -40,7 +40,7 @@ void transfer_to_particles(const Particles<T>& particles, Field<T>& field,
                            std::shared_ptr<const dolfinx::fem::Function<T>> f,
                            const double tol = 1.0e-6, const int maxit = 15)
 {
-  const std::vector<std::int32_t>& p2c = particles.particle_to_cell();
+  std::span<const std::int32_t> p2c = particles.particle_to_cell();
 
   const std::span<const T> x = particles.x().data();
   const std::array<std::size_t, 2> xshape
@@ -82,15 +82,14 @@ std::vector<std::int32_t> find_deficient_cells(
   const int tdim = mesh->topology()->dim();
   std::int32_t ncells = mesh->topology()->index_map(tdim)->size_local();
 
-  const std::vector<std::vector<std::size_t>>& c2p
-    = pax.cell_to_particle();
+  std::span<const std::size_t> offsets = pax.cell_offsets();
 
   std::vector<std::int32_t> deficient_cells;
   for (std::int32_t c = 0; c < ncells; ++c)
   {
     const std::size_t ncdof = V->dofmap()->cell_dofs(c).size();
-    const std::size_t ncp
-      = (static_cast<std::size_t>(c) < c2p.size()) ? c2p[c].size() : 0;
+    const std::size_t ncp = (static_cast<std::size_t>(c) < pax.num_cells())
+      ? offsets[c + 1] - offsets[c] : 0;
     if (ncp < ncdof)
       deficient_cells.push_back(c);
   }
@@ -215,8 +214,7 @@ void transfer_to_function_l2_callback(
 
   // Vector of expansion_coefficients to be set
   std::span<T> expansion_coefficients = f->x()->array();
-  const std::vector<std::vector<std::size_t>>& cell_to_particle
-      = pax.cell_to_particle();
+  std::span<const std::size_t> offsets = pax.cell_offsets();
 
   // Basis evaluations, shape (np, space_dimension, value_size)
   const auto [basis_evals, basis_shape]
@@ -235,13 +233,12 @@ void transfer_to_function_l2_callback(
   //  QT . Q: (space_dimension x space_dimension)
   //  L: (n_p x block_size)
   //  QT . L: (space_dimension x block_size)
-  const std::vector<std::size_t> no_particles;
   for (std::int32_t c = 0; c < ncells; ++c)
   {
-    const std::vector<std::size_t>& cell_particles
-      = (static_cast<std::size_t>(c) < cell_to_particle.size())
-        ? cell_to_particle[c] : no_particles;
-    const std::size_t cell_np = cell_particles.size();
+    // The cell's particles are [p0, p0 + cell_np)
+    const bool indexed = static_cast<std::size_t>(c) < pax.num_cells();
+    const std::size_t p0 = indexed ? offsets[c] : 0;
+    const std::size_t cell_np = indexed ? offsets[c + 1] - p0 : 0;
 
     // Assemble Q
     std::vector<T> Q_T_data(cell_np * space_dimension);
@@ -251,7 +248,7 @@ void transfer_to_function_l2_callback(
     mdspan_t<T, 2> Q(Q_data.data(), cell_np, space_dimension);
     for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
     {
-      const std::size_t p_idx = cell_particles[cell_p];
+      const std::size_t p_idx = p0 + cell_p;
       for (std::size_t i = 0; i < space_dimension; ++i)
         Q(cell_p, i) = basis_evals_md(p_idx, i, 0); // Scalar basis, checked above
     }
@@ -262,7 +259,7 @@ void transfer_to_function_l2_callback(
     mdspan_t<T, 2> L(L_data.data(), cell_np, block_size);
     for (std::size_t cell_p = 0; cell_p < cell_np; ++cell_p)
     {
-      const std::size_t p_idx = cell_particles[cell_p];
+      const std::size_t p_idx = p0 + cell_p;
       for (int b = 0; b < block_size; ++b)
         L(cell_p, b) = field.data()[p_idx * block_size + b];
     }

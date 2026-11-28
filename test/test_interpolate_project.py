@@ -48,10 +48,12 @@ def test_find_deficient_cells(k, dtype, cell_type, shape):
 
     num_to_delete = 1
     for c in cells_to_cull:
-        pidxs = ptcls.cell_to_particle()[c]
-        for _ in range(num_to_delete):
-            ptcls.delete_particle(c, 0)
-        assert len(ptcls.cell_to_particle()[c]) == len(pidxs) - num_to_delete
+        offsets = ptcls.cell_offsets()
+        np_cell = offsets[c + 1] - offsets[c]
+        ptcls.delete_particles(
+            np.arange(offsets[c], offsets[c] + num_to_delete))
+        offsets = ptcls.cell_offsets()
+        assert offsets[c + 1] - offsets[c] == np_cell - num_to_delete
 
     u = dolfinx.fem.Function(Q)
     deficient_cells = pyleopart.find_deficient_cells(u._cpp_object, ptcls)

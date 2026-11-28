@@ -57,14 +57,12 @@ class Relocate(common.Benchmark):
 
     def prepare(self, mesh, args, state):
         ptcls = state["ptcls"]
-        pidxs = ptcls.active_pidxs()
         x = ptcls.x().data()
-        x[pidxs] = MOTIONS[args.motion](
-            x[pidxs], mesh.geometry.dim, 1.0 / state["n"])
+        x[:] = MOTIONS[args.motion](x, mesh.geometry.dim, 1.0 / state["n"])
 
     def run(self, mesh, args, state):
         ptcls = state["ptcls"]
-        ptcls.relocate_bbox(mesh._cpp_object, ptcls.active_pidxs())
+        ptcls.relocate_bbox(mesh._cpp_object)
 
     def config(self, args, state):
         return {"ppc": common.default_np_per_cell(args, DEFAULT_PPC),

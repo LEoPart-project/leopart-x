@@ -63,7 +63,7 @@ def test_advect_exact_space(tableau):
         if mesh.comm.rank == 0:
             ptcls.field("idx").data().T[:] = np.arange(xp.shape[0],
                                                        dtype=np.double)
-        ptcls.relocate_bbox(mesh._cpp_object, np.arange(xp_arr.shape[0]))
+        ptcls.relocate_bbox(mesh._cpp_object)
         tableau.check_and_create_fields(ptcls)
 
         t = 0.0
@@ -72,9 +72,8 @@ def test_advect_exact_space(tableau):
             pyleopart.rk(mesh._cpp_object, ptcls, tableau,
                          lambda t: u._cpp_object, t, dt)
 
-        active = np.where(np.array(ptcls.particle_to_cell()) != -1)[0]
-        idxs = ptcls.field("idx").data()[:, 0].astype(int)[active]
-        l2_err = np.linalg.norm(ptcls.x().data()[active] - xp[idxs], axis=1)
+        idxs = ptcls.field("idx").data()[:, 0].astype(int)
+        l2_err = np.linalg.norm(ptcls.x().data() - xp[idxs], axis=1)
         idxs = np.concatenate(mesh.comm.allgather(idxs))
         l2_err = np.concatenate(mesh.comm.allgather(l2_err))
         l2_errors[idxs, run_num] = l2_err

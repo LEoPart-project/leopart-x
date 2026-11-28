@@ -3,8 +3,11 @@
 // License: GNU Lesser GPL version 3 or any later version
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
+#include <algorithm>
 #include <cassert>
 #include <dolfinx.h>
+#include <numeric>
+#include <ranges>
 
 #include "generation.h"
 #include "Particles.h"
@@ -16,86 +19,70 @@ Particles<T>::Particles(const std::vector<T>& x,
                         const std::vector<std::int32_t>& cells,
                         const std::size_t gdim) :
                         _particle_to_cell(cells),
-                        _x("x", {gdim}, x.size() / gdim)
+                        _x("x", {gdim}, cells.size())
 {
-  // Find max cell index, and create cell->particle map
-  std::int32_t max_cell = 0;
-  if (!cells.empty())
-  {
-    auto max_cell_it = std::max_element(cells.begin(), cells.end());
-    max_cell = *max_cell_it;
-  }
-  _cell_to_particle.resize(max_cell + 1);
-  for (std::size_t p = 0; p < cells.size(); ++p)
-  {
-    if (cells[p] == INVALID_CELL)
-      continue;
-    _cell_to_particle[cells[p]].push_back(p);
-  }
-
-  // Create position data field
+  if (x.size() != cells.size() * gdim)
+    throw std::invalid_argument(
+      "Number of particle positions and cells differ");
   std::copy(x.cbegin(), x.cend(), _x.data().begin());
+
+  // Negative cells, conventionally -1, mark particles to drop
+  for (std::int32_t& c : _particle_to_cell)
+    c = std::max(c, INVALID_CELL);
+  sort_by_cell(0);
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
-std::size_t Particles<T>::add_particle(
-  std::span<const T> x, std::int32_t cell)
+std::size_t Particles<T>::append(std::size_t n)
 {
-  assert(cell != INVALID_CELL);
-  assert(cell >= 0);
-  assert(cell < (std::int32_t) _cell_to_particle.size());
-  assert(x.size() == _x.value_shape()[0]);
-
-  std::size_t pidx;
-  if (_free_list.empty())
-  {
-    // Need to create a new particle, and extend associated fields
-    // Get new particle index from size of _posname field
-    // (which must exist)
-    pidx = _x.size();
-    // Resize all fields
-    _x.resize(_x.size() + 1);
-    for (auto& [f_name, f] : _fields)
-      f.resize(f.size() + 1);
-    _particle_to_cell.resize(_particle_to_cell.size() + 1);
-  }
-  else
-  {
-    pidx = _free_list.back();
-    _free_list.pop_back();
-
-    // The reused slot still holds the deleted particle's data. Zero it,
-    // as for newly allocated slots.
-    for (auto& [f_name, f] : _fields)
-    {
-      std::span<T> f_data = f.data(pidx);
-      std::fill(f_data.begin(), f_data.end(), T(0));
-    }
-  }
-
-  _cell_to_particle[cell].push_back(pidx);
-  _particle_to_cell[pidx] = cell;
-  std::copy_n(x.begin(), x.size(), _x.data(pidx).begin());
-  return pidx;
+  // Growing a std::vector value-initialises the new entries, so every
+  // field of a new particle is zero
+  const std::size_t first = num_particles();
+  _x.resize(first + n);
+  for (auto& [name, f] : _fields)
+    f.resize(first + n);
+  _particle_to_cell.resize(first + n, 0);
+  return first;
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
-void Particles<T>::delete_particle(std::int32_t cell, std::size_t p_local)
+std::vector<std::size_t> Particles<T>::add_particles(
+  std::span<const T> x, std::span<const std::int32_t> cells)
 {
-  assert(cell != INVALID_CELL);
-  assert(cell >= 0);
-  assert(cell < (std::int32_t) _cell_to_particle.size());
+  const std::size_t xdim = _x.value_size();
+  if (x.size() != cells.size() * xdim)
+    throw std::invalid_argument(
+      "Number of particle positions and cells differ");
+  if (std::ranges::any_of(cells, [](std::int32_t c) { return c < 0; }))
+    throw std::invalid_argument("Particle cells must be non-negative");
 
-  // delete cell to particle entry
-  std::vector<std::size_t>& cp = _cell_to_particle[cell];
-  assert(p_local < cp.size());
-  std::size_t pidx = cp[p_local];
-  cp.erase(cp.begin() + p_local);
+  const std::size_t first = append(cells.size());
+  std::copy(x.begin(), x.end(), _x.data().begin() + first * xdim);
+  std::copy(cells.begin(), cells.end(), _particle_to_cell.begin() + first);
+  sort_by_cell(num_cells());
 
-  assert(pidx < _particle_to_cell.size());
-  _particle_to_cell[pidx] = INVALID_CELL;
-
-  _free_list.push_back(pidx);
+  // The sort is stable and the new particles were appended, so in each
+  // cell they are the last particles, in the order given
+  std::vector<std::size_t> next(num_cells(), 0);
+  for (const std::int32_t c : cells)
+    ++next[c];
+  for (std::size_t c = 0; c < next.size(); ++c)
+    next[c] = _cell_offsets[c + 1] - next[c];
+  std::vector<std::size_t> pidxs(cells.size());
+  for (std::size_t i = 0; i < cells.size(); ++i)
+    pidxs[i] = next[cells[i]]++;
+  return pidxs;
+}
+//------------------------------------------------------------------------
+template <std::floating_point T>
+void Particles<T>::delete_particles(std::span<const std::size_t> pidxs)
+{
+  if (std::ranges::any_of(pidxs, [n = num_particles()](std::size_t p)
+                          { return p >= n; }))
+    throw std::out_of_range("Particle index out of range");
+  for (const std::size_t p : pidxs)
+    _particle_to_cell[p] = INVALID_CELL;
+  sort_by_cell(num_cells());
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
@@ -112,22 +99,21 @@ void Particles<T>::add_field(
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
-void Particles<T>::sort_by_cell()
+void Particles<T>::sort_by_cell(std::size_t num_cells)
 {
   dolfinx::common::Timer timer("leopart::Particles::sort_by_cell");
 
-  const std::size_t num_cells = _cell_to_particle.size();
   const std::size_t num_slots = _particle_to_cell.size();
+  for (const std::int32_t c : _particle_to_cell)
+    num_cells = std::max<std::size_t>(num_cells, c + 1);
 
   // Count the particles in each cell, then offsets[c] is the new index
   // of the first particle in cell c
   std::vector<std::size_t> offsets(num_cells + 1, 0);
   for (const std::int32_t c : _particle_to_cell)
   {
-    if (c == INVALID_CELL)
-      continue;
-    assert(c >= 0 and static_cast<std::size_t>(c) < num_cells);
-    ++offsets[c + 1];
+    if (c != INVALID_CELL)
+      ++offsets[c + 1];
   }
   std::partial_sum(offsets.begin(), offsets.end(), offsets.begin());
   const std::size_t num_particles = offsets.back();
@@ -145,24 +131,24 @@ void Particles<T>::sort_by_cell()
     }
   }
 
-  // Move the particle data
-  _x.gather(src);
-  for (auto& [name, f] : _fields)
-    f.gather(src);
+  // Move the particle data, unless it is already in place
+  const bool identity = num_particles == num_slots
+    and std::ranges::equal(src, std::views::iota(std::size_t(0), num_slots));
+  if (!identity)
+  {
+    _x.gather(src);
+    for (auto& [name, f] : _fields)
+      f.gather(src);
+  }
 
-  // Rebuild the maps between particles and cells
   _particle_to_cell.resize(num_particles);
   for (std::size_t c = 0; c < num_cells; ++c)
   {
     std::fill(_particle_to_cell.begin() + offsets[c],
               _particle_to_cell.begin() + offsets[c + 1],
               static_cast<std::int32_t>(c));
-    std::vector<std::size_t>& cps = _cell_to_particle[c];
-    cps.resize(offsets[c + 1] - offsets[c]);
-    std::iota(cps.begin(), cps.end(), offsets[c]);
   }
-
-  _free_list.clear();
+  _cell_offsets = std::move(offsets);
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
@@ -171,13 +157,11 @@ void Particles<T>::relocate_bbox_on_proc(
 {
   dolfinx::common::Timer timer("leopart::Particles::relocate_bbox_on_proc");
 
-  // Resize member if required, TODO: Handle ghosts
+  // TODO: Handle ghosts
   const int tdim = mesh.topology()->dim();
   std::shared_ptr<const dolfinx::common::IndexMap> map =
     mesh.topology()->index_map(tdim);
   const std::size_t total_cells = map->size_local();
-  if (_cell_to_particle.size() < total_cells)
-    _cell_to_particle.resize(total_cells);
 
   // Create bbox tree for mesh
   std::vector<std::int32_t> cells(total_cells);
@@ -197,46 +181,26 @@ void Particles<T>::relocate_bbox_on_proc(
   timer1.stop();
   timer1.flush();
 
+  // Assign each particle its new cell. Particles outside the mesh are
+  // dropped by the sort.
   dolfinx::common::Timer timer2("leopart::Particles::relocate_bbox_on_proc post process");
-  std::vector<std::size_t> lost;
   for (std::int32_t l = 0; l < cells_collided.num_nodes(); ++l)
   {
-    if (cells_collided.links(l).empty())
-    {
-      lost.push_back(pidxs[l]);
-    }
-    else
-    {
-      const std::size_t pidx = pidxs[l];
-      const std::int32_t new_cell = cells_collided.links(l)[0];
-      if (_particle_to_cell[pidx] == new_cell)
-        continue;
-
-      // Update old and new cells' particles
-      const auto [old_cell, local_pidx] = global_to_local(pidx);
-      if (old_cell != INVALID_CELL)
-      {
-        std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
-        cps.erase(cps.begin() + local_pidx);
-      }
-      _cell_to_particle[new_cell].push_back(pidx);
-      
-      // Update particle's cell
-      _particle_to_cell[pidx] = new_cell;
-    }
-  }
-
-  for (const std::size_t pidx : lost)
-  {
-    const auto [old_cell, local_pidx] = global_to_local(pidx);
-    if (old_cell == INVALID_CELL)
-      continue;
-    delete_particle(old_cell, local_pidx);
+    std::span<const std::int32_t> collided = cells_collided.links(l);
+    _particle_to_cell[pidxs[l]] = collided.empty() ? INVALID_CELL : collided[0];
   }
   timer2.stop();
   timer2.flush();
 
-  sort_by_cell();
+  sort_by_cell(total_cells);
+}
+//------------------------------------------------------------------------
+template <std::floating_point T>
+void Particles<T>::relocate_bbox(const dolfinx::mesh::Mesh<T>& mesh)
+{
+  std::vector<std::size_t> pidxs(num_particles());
+  std::iota(pidxs.begin(), pidxs.end(), 0);
+  relocate_bbox(mesh, pidxs);
 }
 //------------------------------------------------------------------------
 template <std::floating_point T>
@@ -253,81 +217,63 @@ void Particles<T>::relocate_bbox(
   const std::int32_t rank = dolfinx::MPI::rank(mesh.comm());
   const std::size_t xdim = _x.value_size();
 
-  // Resize member if required, TODO: Handle ghosts
+  // TODO: Handle ghosts
   std::shared_ptr<const dolfinx::common::IndexMap> map =
     mesh.topology()->index_map(mesh.topology()->dim());
   const std::size_t total_cells = map->size_local();
-  if (_cell_to_particle.size() < total_cells)
-    _cell_to_particle.resize(total_cells);
 
   // Find ownership of the geometry points
   const auto [src_owner, dest_owner, dest_points, dest_cells, dest_data] =
     determine_point_ownership(mesh, pidxs);
   std::span<const T> dest_points_span(dest_points);
 
-  // Find lost particles (outside of the geometry)
-  std::vector<std::size_t> lost;
-
-  // Mark particles located outside the domain as lost.
-  // Delete the local particles which are now off process to make room
-  // for (potentially) incoming particles
+  // Particles leaving this process, to another process or out of the
+  // mesh, are dropped by the sort
   std::vector<std::size_t> pidxs_on_proc;
   for (std::size_t i = 0; i < src_owner.size(); ++i)
   {
-    if (src_owner[i] != rank)
-    {
-      if (src_owner[i] < 0)
-        lost.push_back(pidxs[i]);
-      const auto [cell, local_pidx] = global_to_local(pidxs[i]);
-      if (cell != INVALID_CELL)
-        delete_particle(cell, local_pidx);
-    }
-    else
+    if (src_owner[i] == rank)
       pidxs_on_proc.push_back(pidxs[i]);
+    else
+      _particle_to_cell[pidxs[i]] = INVALID_CELL;
   }
 
-  // Curate particles which are still local or those coming
-  // from another process
-  std::size_t on_proc_offset = 0;
+  // Assign particles staying on this process their new cell, and count
+  // those arriving from other processes
+  std::size_t num_incoming = 0;
+  {
+    std::size_t on_proc_offset = 0;
+    for (std::size_t i = 0; i < dest_owner.size(); ++i)
+    {
+      if (dest_owner[i] == rank)
+        _particle_to_cell[pidxs_on_proc[on_proc_offset++]] = dest_cells[i];
+      else
+        ++num_incoming;
+    }
+  }
+
+  // Append the arriving particles. Communicated points are padded to 3
+  // components.
+  std::size_t p_new = append(num_incoming);
+  std::span<T> x_data = _x.data();
   for (std::size_t i = 0; i < dest_owner.size(); ++i)
   {
-    const std::int32_t new_cell = dest_cells[i];
     if (dest_owner[i] == rank)
+      continue;
+    std::copy_n(dest_points_span.begin() + i * 3, xdim,
+                x_data.begin() + p_new * xdim);
+    _particle_to_cell[p_new] = dest_cells[i];
+    for (const auto& [field_name, field_data] : dest_data)
     {
-      // Particle is already on process
-      const std::size_t pidx = pidxs_on_proc[on_proc_offset++];
-      if (new_cell == _particle_to_cell[pidx])
-        continue;
-
-      // Particle changed cell: update old and new cells' particles
-      const auto [old_cell, local_pidx] = global_to_local(pidx);
-      if (old_cell != INVALID_CELL)
-      {
-        std::vector<std::size_t>& cps = _cell_to_particle[old_cell];
-        cps.erase(cps.begin() + local_pidx);
-      }
-      _cell_to_particle[new_cell].push_back(pidx);
-
-      // Update particle's cell
-      _particle_to_cell[pidx] = new_cell;
+      Field<T>& f = field(field_name);
+      const std::size_t field_vs = f.value_size();
+      std::copy_n(field_data.begin() + i * field_vs, field_vs,
+                  f.data(p_new).begin());
     }
-    else
-    {
-      // Particle came from another process. Communicated points are
-      // padded to 3 components.
-      const std::size_t new_pidx = add_particle(
-        dest_points_span.subspan(i * 3, xdim), new_cell);
-      for (const auto& [field_name, field_data] : dest_data)
-      {
-        const std::size_t field_vs = field(field_name).value_size();
-        std::copy_n(
-          field_data.begin() + i * field_vs, field_vs,
-          field(field_name).data(new_pidx).begin());
-      }
-    }
+    ++p_new;
   }
 
-  sort_by_cell();
+  sort_by_cell(total_cells);
 }
 //------------------------------------------------------------------------
 /// Adapted from dolfinx::geomety::utils::determine_point_ownership
@@ -779,35 +725,37 @@ void Particles<T>::generate_minimum_particles_per_cell(
 {
   const std::int32_t num_cells = mesh.topology()->index_map(
     mesh.topology()->dim())->size_local();
-  if (_cell_to_particle.size() < static_cast<std::size_t>(num_cells))
-    _cell_to_particle.resize(num_cells);
 
   std::vector<std::int32_t> cells_to_populate;
   std::vector<std::size_t> np_per_cell_vec;
-  for (std::int32_t i = 0; i < num_cells; ++i)
+  for (std::int32_t c = 0; c < num_cells; ++c)
   {
-    if (_cell_to_particle[i].size() >= np_per_cell)
+    const std::size_t np_cell = (static_cast<std::size_t>(c) < this->num_cells())
+      ? _cell_offsets[c + 1] - _cell_offsets[c] : 0;
+    if (np_cell >= np_per_cell)
       continue;
 
-    cells_to_populate.push_back(i);
-    np_per_cell_vec.push_back(np_per_cell - _cell_to_particle[i].size());
+    cells_to_populate.push_back(c);
+    np_per_cell_vec.push_back(np_per_cell - np_cell);
   }
 
   const auto [xp_new, p2cell_new] = leopart::generation::mesh_fill(
     mesh, np_per_cell_vec, cells_to_populate);
-  
+
   // Generated points have gdim components, whereas the particles may
   // store a different number (e.g. 2D positions padded to 3 components)
   const std::size_t gdim = mesh.geometry().dim();
   const std::size_t xdim = _x.value_size();
   const std::size_t ncopy = std::min(gdim, xdim);
-  std::vector<T> x(xdim, 0.0);
-  const std::size_t num_new_p = p2cell_new.size();
-  for (std::size_t pidx = 0; pidx < num_new_p; ++pidx)
+  const std::size_t first = append(p2cell_new.size());
+  std::span<T> x_data = _x.data();
+  for (std::size_t i = 0; i < p2cell_new.size(); ++i)
   {
-    std::copy_n(xp_new.begin() + pidx * gdim, ncopy, x.begin());
-    add_particle(x, p2cell_new[pidx]);
+    std::copy_n(xp_new.begin() + i * gdim, ncopy,
+                x_data.begin() + (first + i) * xdim);
+    _particle_to_cell[first + i] = p2cell_new[i];
   }
+  sort_by_cell(num_cells);
 }
 //------------------------------------------------------------------------
 template class leopart::Particles<double>;

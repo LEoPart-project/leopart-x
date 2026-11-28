@@ -95,8 +95,7 @@ NB_MODULE(cpp, m)
           nb::rv_policy::reference_internal)
       .def_prop_ro("value_shape", &Field<dtype>::value_shape)
       .def_prop_ro("value_size", &Field<dtype>::value_size)
-      .def_ro("name", &Field<dtype>::name)
-      .def("resize", &Field<dtype>::resize, nb::arg("n"));
+      .def_ro("name", &Field<dtype>::name);
 
   // Class Particles
   nb::class_<Particles<dtype>>(m, "Particles")
@@ -140,28 +139,71 @@ NB_MODULE(cpp, m)
            nb::rv_policy::reference_internal)
       .def("add_field", &Particles<dtype>::add_field,
            nb::arg("name"), nb::arg("shape"))
-      .def("add_particle",
-          [](Particles<dtype>& self, const std::vector<dtype>& px,
-             std::int32_t cell)
+      .def("add_particles",
+          [](Particles<dtype>& self,
+             nb::ndarray<const dtype, nb::ndim<2>, nb::c_contig> px,
+             const std::vector<std::int32_t>& cells)
           {
-            return self.add_particle(px, cell);
+            if (px.shape(0) != cells.size()
+                or px.shape(1) != self.x().value_size())
+              throw std::invalid_argument(
+                "Particle positions must have shape (len(cells), "
+                "x().value_size)");
+            const std::vector<std::size_t> pidxs = self.add_particles(
+              std::span<const dtype>(px.data(), px.size()), cells);
+            std::vector<std::int64_t> pidxs_i64(pidxs.begin(), pidxs.end());
+            const std::size_t n = pidxs_i64.size();
+            return as_nbarray(std::move(pidxs_i64), {n});
           },
-          nb::arg("x"), nb::arg("cell"))
-      .def("delete_particle", &Particles<dtype>::delete_particle,
-           nb::arg("cell"), nb::arg("p_local"))
+          nb::arg("x"), nb::arg("cells"),
+          "Add particles, every field zero, and return their indices. "
+          "Changes the indices of existing particles.")
+      .def("delete_particles",
+           [](Particles<dtype>& self, const std::vector<std::size_t>& pidxs)
+           {
+             self.delete_particles(pidxs);
+           },
+           nb::arg("pidxs"),
+           "Delete particles. Changes the indices of the remaining "
+           "particles.")
       .def("field",
            nb::overload_cast<std::string>(&Particles<dtype>::field),
            nb::rv_policy::reference_internal, nb::arg("name"))
-      .def("global_to_local",
-           [](const Particles<dtype>& self, std::size_t p)
+      .def("num_particles", &Particles<dtype>::num_particles)
+      .def("num_cells", &Particles<dtype>::num_cells)
+      .def("cell_offsets",
+           [](const Particles<dtype>& self)
            {
-             const auto [cell, p_local] = self.global_to_local(p);
-             return std::make_pair(cell, p_local);
+             // Exposed as signed integers, as NumPy promotes mixed
+             // signed and unsigned 64-bit arithmetic to floating point.
+             // The signed and unsigned types of a size may alias.
+             static_assert(sizeof(std::size_t) == sizeof(std::int64_t));
+             std::span<const std::size_t> offsets = self.cell_offsets();
+             return nb::ndarray<const std::int64_t, nb::numpy>(
+               reinterpret_cast<const std::int64_t*>(offsets.data()),
+               {offsets.size()});
            },
-           nb::arg("p"))
-      .def("sort_by_cell", &Particles<dtype>::sort_by_cell)
-      .def("cell_to_particle", &Particles<dtype>::cell_to_particle)
-      .def("particle_to_cell", &Particles<dtype>::particle_to_cell)
+           nb::rv_policy::reference_internal,
+           "Read-only int64 view: the particles of cell c are "
+           "offsets[c]:offsets[c + 1]. Invalidated when particles are "
+           "added, deleted or relocated.")
+      .def("particle_to_cell",
+           [](const Particles<dtype>& self)
+           {
+             std::span<const std::int32_t> p2c = self.particle_to_cell();
+             return nb::ndarray<const std::int32_t, nb::numpy>(
+               p2c.data(), {p2c.size()});
+           },
+           nb::rv_policy::reference_internal,
+           "Read-only view of the cell of each particle. Invalidated when "
+           "particles are added, deleted or relocated.")
+      .def("relocate_bbox",
+           [](Particles<dtype>& self,
+              const dolfinx::mesh::Mesh<dtype_geom>& mesh)
+           {
+             self.relocate_bbox(mesh);
+           },
+           nb::arg("mesh"))
       .def("relocate_bbox",
            [](Particles<dtype>& self,
               const dolfinx::mesh::Mesh<dtype_geom>& mesh,
@@ -186,13 +228,6 @@ NB_MODULE(cpp, m)
              self.generate_minimum_particles_per_cell(mesh, np_per_cell);
            },
            nb::arg("mesh"), nb::arg("np_per_cell"))
-      .def("active_pidxs",
-           [](Particles<dtype>& self)
-           {
-             std::vector<std::size_t> pidxs = self.active_pidxs();
-             const std::size_t n = pidxs.size();
-             return as_nbarray(std::move(pidxs), {n});
-           })
       .def("field_exists", &Particles<dtype>::field_exists, nb::arg("name"));
 
   // Generation functions
